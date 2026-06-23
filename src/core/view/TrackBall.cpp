@@ -178,7 +178,9 @@ namespace sibr {
 	bool TrackBall::fromBoundingBox(const Eigen::AlignedBox<float, 3> & box, const Viewport & viewport)
 	{
 
-		if (box.isEmpty() || (box.diagonal().array() == 0.0f).any()) {
+		// OLD: if (box.isEmpty() || (box.diagonal().array() == 0.0f).any()) {
+		// NEW: cwiseEqual avoids C++20 rewritten-candidates ambiguity on ArrayWrapper==scalar.
+		if (box.isEmpty() || (box.diagonal().array().cwiseEqual(0.0f)).any()) {
 			SIBR_LOG << " [WARNING] TrackBall::fromMesh : cannot create camera from flat mesh " << std::endl;
 			return false;
 		}

@@ -262,7 +262,10 @@ std::pair<int, float> PlaneEstimator::votePlane(const sibr::Vector4f plane, cons
 	std::cout << distances.row(i) << " ";
 	}
 	std::cout << std::endl;*/
-	mask = (distances < delta && (dotWithOriNormal > normalDot || dotWithOriNormal == 0)).cast<int>();
+	// OLD: mask = (distances < delta && (dotWithOriNormal > normalDot || dotWithOriNormal == 0)).cast<int>();
+	// NEW: C++20 rewritten-candidates rule breaks Eigen scalar==0 (tries 0==ArrayXf, needs explicit ctor).
+	//      Use cwiseEqual(0.0f) to avoid the ambiguous overload resolution.
+	mask = (distances < delta && (dotWithOriNormal > normalDot || dotWithOriNormal.cwiseEqual(0.0f))).cast<int>();
 	
 	Eigen::ArrayXf voteW = (distances+ 0.1f*delta* Eigen::ArrayXf::Ones(distances.rows()));
 	voteW = mask.array().cast<float>().cwiseQuotient(voteW);

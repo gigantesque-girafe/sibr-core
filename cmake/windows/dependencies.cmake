@@ -139,13 +139,13 @@ if (WIN32)
                 CHECK_CACHED_VAR Boost_COMPILER             STRING "-vc110" DOC "vcid (eg: -vc110 for MSVC11)" # NOTE: if it doesnt work, uncomment this option and set the right value for VisualC id
             )
     elseif (MSVC14)
-        set(boost_multiset_arguments 
+        set(boost_multiset_arguments
                 CHECK_CACHED_VAR BOOST_ROOT                 PATH "boost-1.71"
                 CHECK_CACHED_VAR BOOST_INCLUDEDIR 		    PATH "boost-1.71"
                 CHECK_CACHED_VAR BOOST_LIBRARYDIR 		    PATH "boost-1.71/${LIB_BUILT_DIR}"
                 CHECK_CACHED_VAR Boost_COMPILER             STRING "-vc141" DOC "vcid (eg: -vc110 for MSVC11)" # NOTE: if it doesnt work, uncomment this option and set the right value for VisualC id
             )
-        
+
         option(BOOST_MINIMAL_VERSION "Only get minimal Boost dependencies" ON)
 
         if(${BOOST_MINIMAL_VERSION})
@@ -153,6 +153,23 @@ if (WIN32)
         else()
             set(BOOST_MSVC14_ZIP "boost-1.71.7z")
         endif()
+    # NEW: MSVC17 (VS2022 / vc143) — reuse the vc141 Boost-1.71 package from Inria.
+    # The vc141 DLLs are ABI-compatible at runtime on Windows (MSVCP140.dll ships with VS2022 redistributable).
+    elseif (MSVC17)
+        set(boost_multiset_arguments
+                CHECK_CACHED_VAR BOOST_ROOT                 PATH "boost-1.71"
+                CHECK_CACHED_VAR BOOST_INCLUDEDIR           PATH "boost-1.71"
+                CHECK_CACHED_VAR BOOST_LIBRARYDIR           PATH "boost-1.71/${LIB_BUILT_DIR}"
+                CHECK_CACHED_VAR Boost_COMPILER             STRING "-vc141" DOC "using vc141 Boost DLLs on vc143 runtime"
+            )
+        option(BOOST_MINIMAL_VERSION "Only get minimal Boost dependencies" ON)
+        if(${BOOST_MINIMAL_VERSION})
+            set(BOOST_MSVC14_ZIP "boost-1.71-ibr-minimal.7z")
+        else()
+            set(BOOST_MSVC14_ZIP "boost-1.71.7z")
+        endif()
+    # OLD: else ()
+    #     message("There is no provided Boost library for your version of MSVC")
     else ()
         message("There is no provided Boost library for your version of MSVC")
     endif()
@@ -161,6 +178,8 @@ if (WIN32)
         MSVC11 "https://repo-sam.inria.fr/fungraph/dependencies/ibr-common/win3rdParty-MSVC11-splitted%20version/boost_1_55_0.7z"
         MSVC12 "https://repo-sam.inria.fr/fungraph/dependencies/ibr-common/win3rdParty-MSVC11-splitted%20version/boost_1_55_0.7z"
         MSVC14 "https://repo-sam.inria.fr/fungraph/dependencies/ibr-common/win3rdParty-MSVC15-splitted%20version/${BOOST_MSVC14_ZIP}"    # boost compatible with msvc14
+        # NEW: MSVC17 uses the same vc141 Boost-1.71 package
+        MSVC17 "https://repo-sam.inria.fr/fungraph/dependencies/ibr-common/win3rdParty-MSVC15-splitted%20version/${BOOST_MSVC14_ZIP}"
         MULTI_SET ${boost_multiset_arguments}
             CHECK_CACHED_VAR Boost_NO_SYSTEM_PATHS      BOOL ON DOC "Set to ON to disable searching in locations not specified by these boost cached hint variables"
             CHECK_CACHED_VAR Boost_NO_BOOST_CMAKE       BOOL ON DOC "Set to ON to disable the search for boost-cmake (package cmake config file if boost was built with cmake)"

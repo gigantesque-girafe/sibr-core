@@ -81,8 +81,11 @@ Matrix<Scalar, 3, 1, Eigen::DontAlign>	yzx(float fill = 0.f) const {
 /** Check if a vector is exactly zero for all components
 \return true if all components are exactly zero.
 */
-bool	isNull( void ) const { 
-	return (array() == 0).all();
+bool	isNull( void ) const {
+	// OLD: return (array() == 0).all();
+	// NEW: C++20 rewritten-candidates rule breaks operator== on ArrayWrapper vs scalar.
+	//      cwiseEqual avoids operator== entirely.
+	return array().cwiseEqual(Scalar(0)).all();
 }
 
 typedef Scalar Type;
