@@ -36,7 +36,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # CUDA 11.8 toolkit — set explicitly so CMake finds nvcc on VS2022
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CUDA_TOOLKIT_ROOT_DIR "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8"
+    CUDA_TOOLKIT_ROOT_DIR "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
     FOLDER "projects/remote/apps"
 )
 

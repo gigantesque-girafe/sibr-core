@@ -38,6 +38,19 @@ if(NOT Torch_FOUND)
     return()
 endif()
 
+# This LibTorch build injects /d2implyavx512upperregs- via INTERFACE_COMPILE_OPTIONS
+# on its imported targets. That MSVC-internal flag is only understood by the VS2022
+# toolset Torch was built with; our VS2019 cl.exe rejects it with C1007. Strip it.
+foreach(_torch_tgt c10 c10_cuda torch_cpu torch_cuda)
+    if(TARGET ${_torch_tgt})
+        get_target_property(_torch_opts ${_torch_tgt} INTERFACE_COMPILE_OPTIONS)
+        if(_torch_opts)
+            list(FILTER _torch_opts EXCLUDE REGEX "implyavx512upperregs")
+            set_target_properties(${_torch_tgt} PROPERTIES INTERFACE_COMPILE_OPTIONS "${_torch_opts}")
+        endif()
+    endif()
+endforeach()
+
 message(STATUS "[v4] LibTorch found: ${TORCH_INCLUDE_DIRS}")
 
 # ── CUDA ──────────────────────────────────────────────────────────────────────
@@ -96,7 +109,7 @@ endif()
 
 # ── CUDA toolkit path ─────────────────────────────────────────────────────────
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CUDA_TOOLKIT_ROOT_DIR "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8"
+    CUDA_TOOLKIT_ROOT_DIR "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8"
     FOLDER "projects/remote/apps"
 )
 
