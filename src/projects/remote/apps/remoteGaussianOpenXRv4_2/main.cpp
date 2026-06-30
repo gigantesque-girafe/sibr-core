@@ -1,23 +1,24 @@
 /*
- * NEW FILE — SIBR_remoteGaussianOpenXRv4_2_app  (v4.2)
+ * NEW FILE — SIBR_remoteGaussianOpenXRv4_2_app  (v4.2, double-buffered pipeline)
  *
  * Architecture:
- *   Python server (render_vr_v4_2.py) pre-allocates a CUDA IPC buffer, runs deformation
- *   and view-independent feature extraction, and writes Gaussian attributes directly into
- *   shared GPU memory — no host-device copy, no TCP bulk transfer.
- *   This C++ client opens the IPC buffer, loads the TorchScript Color MLP once at startup,
- *   and each frame: waits on a CUDA IPC event, runs the MLP per-eye, and rasterizes.
+ *   Python server (render_vr_v4_2.py) pre-allocates two CUDA IPC buffers and free-runs:
+ *   deform -> extract features -> write into buffer[i%2] -> announce (frame_id, buf_idx,
+ *   N_live) over TCP, without waiting for a reply. A background network thread in this
+ *   process receives those announcements and atomically publishes the latest one, fully
+ *   decoupled from rendering — so Python can be deforming frame N+1 while this app is
+ *   still rendering frame N.
  *
  * Per-frame flow:
  *   main loop:
- *     gaussianView->fetchFromPython()      <- sends 1-byte ping; receives uint32 N_live
+ *     gaussianView->beginFrame()      <- non-blocking: snapshots latest announced buffer
  *     multiViewManager.onRender()
  *       └─ OpenXRRdrMode calls onRenderIBR(left eye)
- *            └─ cudaEventSynchronize(ipc_event)        [instant: event already recorded]
+ *            └─ cudaEventSynchronize(dataReadyEvt)   [instant: event already recorded]
  *            └─ _colorMLP.forward({feat, xyz, cam_L, R_bwd}) → colors
- *            └─ CudaRasterizer::forward(ipc_xyz, ..., ipc_opa, ipc_scale, ipc_rot)
+ *            └─ CudaRasterizer::forward(xyz, ..., opa, scale, rot)
  *       └─ OpenXRRdrMode calls onRenderIBR(right eye)
- *            [same, cudaEventSynchronize still complete for this frame]
+ *            [same buffer; after this eye, records readCompleteEvt for Python]
  *
  * Run:
  *   # Terminal 1
@@ -122,9 +123,9 @@ int main(int ac, char** av)
             }
         }
 
-        // Fetch once per frame; ping triggers Python to pack IPC buffer.
-        // Per-eye Color MLP + rasterizer run inside onRenderIBR.
-        gaussianView->fetchFromPython();
+        // Non-blocking: snapshots whichever buffer Python's network thread most
+        // recently announced. Per-eye Color MLP + rasterizer run inside onRenderIBR.
+        gaussianView->beginFrame();
 
         multiViewManager.onUpdate(sibr::Input::global());
         multiViewManager.onRender(window);

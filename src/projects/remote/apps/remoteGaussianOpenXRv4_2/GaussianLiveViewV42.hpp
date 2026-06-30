@@ -1,18 +1,27 @@
 /*
  * NEW FILE — does not modify any existing SIBR source.
  *
- * GaussianLiveViewV42  (v4.2)
+ * GaussianLiveViewV42  (v4.2, double-buffered pipeline)
  *
  * Differences from v4.0 (GaussianLiveViewV4):
- *   - No per-frame TCP bulk transfer. Gaussian attributes live in a shared CUDA IPC buffer
- *     pre-allocated by Python at startup.
- *   - Startup handshake: sends b"V420", receives N_max + K + TorchScript model + IPC handles.
- *   - Per-frame:  C++ sends 1-byte ping → Python packs buffer + records CUDA event + sends uint32 N_live.
- *                 C++ calls cudaEventSynchronize (instant — TCP ordering guarantees event is
- *                 already recorded), then runs Color MLP + CudaRasterizer directly on IPC pointers.
- *   - No cudaMalloc per-Gaussian buffers in C++; all attribute storage is in Python's IPC buffer.
+ *   - No per-frame TCP bulk transfer. Gaussian attributes live in two shared CUDA IPC
+ *     buffers pre-allocated by Python at startup (double-buffered for pipelining).
+ *   - Startup handshake: sends b"V42D", receives N_max + K + TorchScript model + IPC
+ *     handles for both buffers.
+ *   - Per-frame (pipelined, not ping-pong): Python free-runs, alternately writing into
+ *     buffer 0 / buffer 1 and announcing each over TCP (frame_id, buf_idx, N_live) without
+ *     waiting for a reply. A dedicated network thread receives these announcements and
+ *     atomically publishes the latest one. The render thread's beginFrame() snapshots that
+ *     atomic state once per frame (never blocks on Python), then onRenderIBR() (called once
+ *     per eye) syncs on that buffer's data-ready event (near-instant — already recorded by
+ *     the time the announcement arrived) and runs Color MLP + CudaRasterizer directly on
+ *     its IPC pointers. After both eyes are done, the render thread records that buffer's
+ *     read-complete event so Python knows it's safe to overwrite on a future frame.
+ *   - This lets C++ render frame N while Python deforms frame N+1, instead of strict
+ *     alternating turns on a single buffer.
+ *   - No cudaMalloc per-Gaussian buffers in C++; all attribute storage is in Python's IPC buffers.
  *
- * IPC buffer layout (float32, base pointer = ipc_base + ipc_offset):
+ * IPC buffer layout (float32, base pointer = ipc_base + ipc_offset), same for each of the 2 buffers:
  *   [N_max * 3]      xyz
  *   [N_max * K]      feat    (view-independent features)
  *   [N_max * 9]      R_bwd   (backward rotation, row-major 3×3)
@@ -20,7 +29,7 @@
  *   [N_max * 3]      scale
  *   [N_max * 4]      rot     (unit quaternion)
  *
- * Call once per frame: view->fetchFromPython();
+ * Call once per frame: view->beginFrame();
  * Called per eye by OpenXRRdrMode: view->onRenderIBR(dst, eyeCam);
  */
 #pragma once
@@ -54,9 +63,12 @@
 #include <core/graphics/Shader.hpp>
 #include <core/graphics/Texture.hpp>
 
-#include <string>
-#include <vector>
+#include <atomic>
+#include <cstdint>
 #include <functional>
+#include <string>
+#include <thread>
+#include <vector>
 
 namespace sibr
 {
@@ -71,9 +83,9 @@ public:
                         bool white_bg = false, int device = 0);
     ~GaussianLiveViewV42() override;
 
-    // Call ONCE per frame before onRender().
-    // Sends 1-byte ping; receives uint32 N_live (after Python records IPC event).
-    bool fetchFromPython();
+    // Call ONCE per frame before onRender(). Non-blocking: snapshots whichever
+    // buffer the network thread most recently marked ready. Never waits on Python.
+    bool beginFrame();
 
     void onRenderIBR(sibr::IRenderTarget& dst, const sibr::Camera& eye) override;
     void onGUI() override;
@@ -82,9 +94,12 @@ public:
 
 private:
     bool connectTCP();
-    bool handshakeWithPython();   // sends V420, receives IPC metadata + model
+    bool handshakeWithPython();   // sends V42D, receives IPC metadata + model for both buffers
     void recreateImageBuffer(uint w, uint h);
     void initShader();
+    void startNetworkThread();
+    void stopNetworkThread();
+    void networkThreadFunc();     // runs on _networkThread; only touches atomics, no CUDA/GL
 
     // TCP
     boost::asio::io_service                        _io;
@@ -101,22 +116,39 @@ private:
     // MLP output — kept alive until rasterizer kernel completes (same stream)
     at::Tensor _colors_t;
 
-    // ── CUDA IPC shared buffer ────────────────────────────────────────────────
-    void*        _ipc_base  = nullptr;  // base ptr from cudaIpcOpenMemHandle
-    float*       _ipc_ptr   = nullptr;  // _ipc_base + ipc_offset (start of attribute data)
-    cudaEvent_t  _ipc_event = nullptr;  // from cudaIpcOpenEventHandle
+    // ── CUDA IPC double-buffered shared buffers ───────────────────────────────
+    struct IpcBuffer
+    {
+        void*       base            = nullptr;  // base ptr from cudaIpcOpenMemHandle
+        float*      ptr             = nullptr;  // base + ipc_offset (start of attribute data)
+        cudaEvent_t dataReadyEvt    = nullptr;  // Python -> C++: write complete
+        cudaEvent_t readCompleteEvt = nullptr;  // C++ -> Python: both eyes done reading
 
-    int _N_max  = 0;   // IPC buffer capacity (Gaussians)
-    int _N_live = 0;   // actual Gaussians in current frame (received via TCP)
-    int _K      = 0;   // view-independent feature dim
+        float* xyzPtr   = nullptr;
+        float* featPtr  = nullptr;
+        float* rbwdPtr  = nullptr;
+        float* opaPtr   = nullptr;
+        float* scalePtr = nullptr;
+        float* rotPtr   = nullptr;
+    };
+    IpcBuffer _buffers[2];
 
-    // Pointer arithmetic helpers (computed once after handshake)
-    float* _ipc_xyz_ptr   = nullptr;  // _ipc_ptr + 0
-    float* _ipc_feat_ptr  = nullptr;  // _ipc_ptr + N_max*3
-    float* _ipc_rbwd_ptr  = nullptr;  // _ipc_ptr + N_max*(3+K)
-    float* _ipc_opa_ptr   = nullptr;  // _ipc_ptr + N_max*(3+K+9)
-    float* _ipc_scale_ptr = nullptr;  // _ipc_ptr + N_max*(3+K+10)
-    float* _ipc_rot_ptr   = nullptr;  // _ipc_ptr + N_max*(3+K+13)
+    int _N_max = 0;   // IPC buffer capacity (Gaussians), same for both buffers
+    int _K     = 0;   // view-independent feature dim
+
+    // ── Network thread: receives Python's per-frame announcements, decoupled
+    // from rendering. Only writes these atomics — never touches CUDA/GL. ─────
+    std::thread        _networkThread;
+    std::atomic<bool>  _networkRunning{false};
+    std::atomic<int>       _latestReadyBuf{-1};
+    std::atomic<int>       _latestNLive{0};
+    std::atomic<uint64_t>  _latestFrameId{0};
+
+    // Per-frame snapshot, taken once by beginFrame() and used by both eyes'
+    // onRenderIBR() calls for this frame (must not change mid-frame).
+    int      _currentBufIdx  = -1;
+    int      _currentNLive   = 0;
+    uint64_t _currentFrameId = 0;
 
     // Per-draw small GPU buffers
     float* _view_cuda   = nullptr;
@@ -147,6 +179,18 @@ private:
     bool _white_bg = false;
     int  _device   = 0;
     bool _hasData  = false;
+
+    // ── Per-stage timing (logged every kLogIntervalFrames frames) ────────────────
+    // beginFrame() runs once per frame and should now be near-instant (it no longer
+    // blocks on Python — that's the whole point of pipelining). onRenderIBR() runs
+    // twice per frame (once per eye) — Color MLP + rasterizer time are accumulated
+    // across both eyes and reported as a per-frame total.
+    static constexpr int kLogIntervalFrames = 60;
+    double _beginFrameMsThisFrame = 0.0;
+    double _mlpMsAccum            = 0.0;
+    double _rasterMsAccum         = 0.0;
+    int    _eyeCallsThisFrame     = 0;
+    int    _frameCount            = 0;
 };
 
 } // namespace sibr

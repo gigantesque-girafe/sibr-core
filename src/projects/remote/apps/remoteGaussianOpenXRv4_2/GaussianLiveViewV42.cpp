@@ -1,17 +1,26 @@
 /*
  * NEW FILE — does not modify any existing SIBR source.
  *
- * GaussianLiveViewV42 implementation  (v4.2)
+ * GaussianLiveViewV42 implementation  (v4.2, double-buffered pipeline)
  *
  * Transport upgrade over v4.0:
  *   v4.0: Python → TCP → CPU staging → cudaMemcpy → GPU (every frame, ~2 MB)
  *   v4.2: Python → CUDA IPC shared buffer (zero-copy, no host involvement)
  *
- * Per-frame sequence (after handshake):
- *   1. C++ sends 1-byte ping.
- *   2. Python: deform → extract features → attr_buf.write() → cudaEventRecord → send N_live.
- *   3. C++ receives N_live; calls cudaEventSynchronize (instant, event already recorded).
- *   4. C++ runs Color MLP + CudaRasterizer directly on IPC pointers.
+ * Per-frame sequence (after handshake), pipelined across two buffers:
+ *   1. Python (free-running, no ping): deform → extract features → write into
+ *      buffer[i%2] → cudaEventRecord(dataReadyEvt) → sendall(frame_id, buf_idx, N_live).
+ *   2. C++'s network thread receives that announcement and atomically publishes it —
+ *      this never blocks the render thread.
+ *   3. C++'s render thread (beginFrame(), once per frame) snapshots the latest
+ *      announcement. onRenderIBR() (once per eye) cudaEventSynchronize()s that
+ *      buffer's dataReadyEvt (near-instant — already recorded) and runs Color MLP
+ *      + CudaRasterizer directly on its IPC pointers.
+ *   4. After both eyes are done, C++ records that buffer's readCompleteEvt.
+ *      Python waits on it before reusing that buffer slot for a future frame.
+ *
+ * Because Python no longer waits for a reply, it can deform frame N+1 while C++
+ * is still rendering frame N — the two are no longer strictly alternating turns.
  */
 
 #include "GaussianLiveViewV42.hpp"
@@ -22,6 +31,7 @@
 #include <boost/asio.hpp>
 #include <GL/glew.h>
 
+#include <chrono>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -144,9 +154,17 @@ sibr::GaussianLiveViewV42::GaussianLiveViewV42(
 
 sibr::GaussianLiveViewV42::~GaussianLiveViewV42()
 {
+    // Stop the network thread first — it must not touch `this` while we tear
+    // down CUDA/IPC state below.
+    stopNetworkThread();
+
     // IPC cleanup — must happen before destroying CUDA context
-    if (_ipc_event) { cudaEventDestroy(_ipc_event); _ipc_event = nullptr; }
-    if (_ipc_base)  { cudaIpcCloseMemHandle(_ipc_base); _ipc_base = nullptr; }
+    for (auto& b : _buffers)
+    {
+        if (b.dataReadyEvt)    { cudaEventDestroy(b.dataReadyEvt);    b.dataReadyEvt    = nullptr; }
+        if (b.readCompleteEvt) { cudaEventDestroy(b.readCompleteEvt); b.readCompleteEvt = nullptr; }
+        if (b.base)            { cudaIpcCloseMemHandle(b.base);       b.base            = nullptr; }
+    }
 
     if (_cudaBuffer)   cudaGraphicsUnregisterResource(_cudaBuffer);
     if (_glBuffer)     glDeleteBuffers(1, &_glBuffer);
@@ -226,8 +244,8 @@ bool sibr::GaussianLiveViewV42::connectTCP()
 bool sibr::GaussianLiveViewV42::handshakeWithPython()
 {
     try {
-        // 1. Send 4-byte magic
-        const char magic[4] = {'V','4','2','0'};
+        // 1. Send 4-byte magic (V42D = double-buffer pipelined protocol)
+        const char magic[4] = {'V','4','2','D'};
         boost::asio::write(*_socket, boost::asio::buffer(magic, 4));
 
         // 2. Receive N_max, K, model_size
@@ -249,43 +267,48 @@ bool sibr::GaussianLiveViewV42::handshakeWithPython()
         _mlpLoaded = true;
         SIBR_LOG << "[V42] Color MLP loaded." << std::endl;
 
-        // 4. Receive CUDA IPC memory handle (64 bytes)
-        cudaIpcMemHandle_t mem_handle;
-        tcp_recv_all(*_socket, &mem_handle, sizeof(cudaIpcMemHandle_t));
-
-        // 5. Receive CUDA IPC event handle (64 bytes)
-        cudaIpcEventHandle_t evt_handle;
-        tcp_recv_all(*_socket, &evt_handle, sizeof(cudaIpcEventHandle_t));
-
-        // 6. Receive IPC offset (uint64) and source device (int32)
-        uint64_t ipc_offset = 0;
-        int32_t  src_device = 0;
-        tcp_recv_all(*_socket, &ipc_offset, sizeof(uint64_t));
+        // 4. Receive source device index (int32)
+        int32_t src_device = 0;
         tcp_recv_all(*_socket, &src_device, sizeof(int32_t));
-        SIBR_LOG << "[V42] ipc_offset=" << ipc_offset
-                 << "  src_device=" << src_device << std::endl;
 
-        // 7. Open IPC memory handle → _ipc_base
         CUDA_CHECK(cudaSetDevice(_device));
-        CUDA_CHECK(cudaIpcOpenMemHandle(
-            &_ipc_base, mem_handle, cudaIpcMemLazyEnablePeerAccess));
-        _ipc_ptr = reinterpret_cast<float*>(
-            static_cast<char*>(_ipc_base) + ipc_offset);
 
-        // 8. Open IPC event handle → _ipc_event
-        CUDA_CHECK(cudaIpcOpenEventHandle(&_ipc_event, evt_handle));
+        // 5. Receive IPC handles for each of the 2 buffers and open them
+        for (int i = 0; i < 2; ++i)
+        {
+            uint64_t ipc_offset = 0;
+            tcp_recv_all(*_socket, &ipc_offset, sizeof(uint64_t));
 
-        // 9. Pre-compute field pointers into the IPC buffer
-        //    Layout: xyz[N_max*3] | feat[N_max*K] | R_bwd[N_max*9] | opa[N_max] | scale[N_max*3] | rot[N_max*4]
-        ptrdiff_t off = 0;
-        _ipc_xyz_ptr   = _ipc_ptr + off; off += (ptrdiff_t)_N_max * 3;
-        _ipc_feat_ptr  = _ipc_ptr + off; off += (ptrdiff_t)_N_max * _K;
-        _ipc_rbwd_ptr  = _ipc_ptr + off; off += (ptrdiff_t)_N_max * 9;
-        _ipc_opa_ptr   = _ipc_ptr + off; off += (ptrdiff_t)_N_max * 1;
-        _ipc_scale_ptr = _ipc_ptr + off; off += (ptrdiff_t)_N_max * 3;
-        _ipc_rot_ptr   = _ipc_ptr + off;
+            cudaIpcMemHandle_t mem_handle;
+            tcp_recv_all(*_socket, &mem_handle, sizeof(cudaIpcMemHandle_t));
 
-        SIBR_LOG << "[V42] IPC buffer ready. Total floats: "
+            cudaIpcEventHandle_t data_ready_handle;
+            tcp_recv_all(*_socket, &data_ready_handle, sizeof(cudaIpcEventHandle_t));
+
+            cudaIpcEventHandle_t read_complete_handle;
+            tcp_recv_all(*_socket, &read_complete_handle, sizeof(cudaIpcEventHandle_t));
+
+            IpcBuffer& b = _buffers[i];
+            CUDA_CHECK(cudaIpcOpenMemHandle(&b.base, mem_handle, cudaIpcMemLazyEnablePeerAccess));
+            b.ptr = reinterpret_cast<float*>(static_cast<char*>(b.base) + ipc_offset);
+            CUDA_CHECK(cudaIpcOpenEventHandle(&b.dataReadyEvt, data_ready_handle));
+            CUDA_CHECK(cudaIpcOpenEventHandle(&b.readCompleteEvt, read_complete_handle));
+
+            // Pre-compute field pointers into this buffer.
+            // Layout: xyz[N_max*3] | feat[N_max*K] | R_bwd[N_max*9] | opa[N_max] | scale[N_max*3] | rot[N_max*4]
+            ptrdiff_t off = 0;
+            b.xyzPtr   = b.ptr + off; off += (ptrdiff_t)_N_max * 3;
+            b.featPtr  = b.ptr + off; off += (ptrdiff_t)_N_max * _K;
+            b.rbwdPtr  = b.ptr + off; off += (ptrdiff_t)_N_max * 9;
+            b.opaPtr   = b.ptr + off; off += (ptrdiff_t)_N_max * 1;
+            b.scalePtr = b.ptr + off; off += (ptrdiff_t)_N_max * 3;
+            b.rotPtr   = b.ptr + off;
+
+            SIBR_LOG << "[V42] Buffer " << i << " ready. ipc_offset=" << ipc_offset
+                     << "  src_device=" << src_device << std::endl;
+        }
+
+        SIBR_LOG << "[V42] Both IPC buffers ready. Total floats per buffer: "
                  << (ptrdiff_t)_N_max * (_K + 20) << std::endl;
 
         _handshakeDone = true;
@@ -311,45 +334,108 @@ void sibr::GaussianLiveViewV42::setResolution(const sibr::Vector2i& size)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// fetchFromPython — call once per frame
+// Network thread — receives Python's per-frame announcements (frame_id,
+// buf_idx, N_live) and atomically publishes them. Runs independently of the
+// render thread; never touches CUDA or GL.
 // ─────────────────────────────────────────────────────────────────────────────
 
-bool sibr::GaussianLiveViewV42::fetchFromPython()
+void sibr::GaussianLiveViewV42::networkThreadFunc()
 {
-    if (!_connected) {
-        if (!connectTCP()) return false;
-    }
-
-    try {
-        if (!_handshakeDone) {
-            if (!handshakeWithPython()) {
-                _connected = false;
-                return false;
-            }
+    while (_networkRunning.load(std::memory_order_relaxed))
+    {
+        uint64_t frame_id  = 0;
+        uint32_t buf_idx_u = 0;
+        uint32_t n_live_u  = 0;
+        try {
+            tcp_recv_all(*_socket, &frame_id,  sizeof(uint64_t));
+            tcp_recv_all(*_socket, &buf_idx_u, sizeof(uint32_t));
+            tcp_recv_all(*_socket, &n_live_u,  sizeof(uint32_t));
+        } catch (const std::exception&) {
+            // Python disconnected. Don't touch non-atomic members from this
+            // thread — beginFrame() on the render thread detects this via
+            // _networkRunning and handles teardown/reconnect.
+            _networkRunning.store(false, std::memory_order_relaxed);
+            return;
         }
+        // Write order matters: n_live/frame_id first, buf_idx last (release).
+        // beginFrame() reads buf_idx first (acquire), so if it observes a new
+        // buf_idx it's guaranteed to also observe the matching n_live/frame_id —
+        // no torn (buf_idx, n_live) combination.
+        _latestNLive.store((int)n_live_u, std::memory_order_relaxed);
+        _latestFrameId.store(frame_id, std::memory_order_relaxed);
+        _latestReadyBuf.store((int)buf_idx_u, std::memory_order_release);
+    }
+}
 
-        // Send 1-byte ping: "ready for next frame"
-        const char ping = 0x00;
-        boost::asio::write(*_socket, boost::asio::buffer(&ping, 1));
+void sibr::GaussianLiveViewV42::startNetworkThread()
+{
+    _latestReadyBuf.store(-1, std::memory_order_relaxed);
+    _networkRunning.store(true, std::memory_order_relaxed);
+    _networkThread = std::thread(&GaussianLiveViewV42::networkThreadFunc, this);
+}
 
-        // Receive N_live. Python sends this AFTER recording the CUDA event,
-        // so the event is always already complete when we call cudaEventSynchronize
-        // in onRenderIBR — that call returns instantly.
-        uint32_t n = 0;
-        tcp_recv_all(*_socket, &n, sizeof(uint32_t));
-        _N_live  = (int)n;
-        _hasData = true;
-        return true;
+void sibr::GaussianLiveViewV42::stopNetworkThread()
+{
+    _networkRunning.store(false, std::memory_order_relaxed);
+    // The network thread is blocked in a synchronous read; closing the socket
+    // is what actually unblocks it (the atomic flag alone won't interrupt it).
+    if (_socket) {
+        boost::system::error_code ec;
+        _socket->close(ec);
+    }
+    if (_networkThread.joinable()) _networkThread.join();
+}
 
-    } catch (const std::exception& e) {
-        SIBR_LOG << "[V42] fetch error: " << e.what() << " — reconnecting." << std::endl;
+// ─────────────────────────────────────────────────────────────────────────────
+// beginFrame — call once per frame. Non-blocking: snapshots whichever buffer
+// the network thread most recently marked ready. Never waits on Python.
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool sibr::GaussianLiveViewV42::beginFrame()
+{
+    // Detect a network-thread death (Python disconnected) and tear down.
+    if (_connected && _handshakeDone && !_networkRunning.load(std::memory_order_relaxed))
+    {
+        SIBR_LOG << "[V42] Lost connection to Python — reconnecting." << std::endl;
+        if (_networkThread.joinable()) _networkThread.join();
+        _socket.reset();
         _connected     = false;
         _handshakeDone = false;
-        _hasData       = false;
         _mlpLoaded     = false;
-        _socket.reset();
-        return false;
+        _hasData       = false;
+        _latestReadyBuf.store(-1, std::memory_order_relaxed);
     }
+
+    if (!_connected) {
+        if (!connectTCP()) { _hasData = false; return false; }
+    }
+    if (!_handshakeDone) {
+        if (!handshakeWithPython()) {
+            _connected = false;
+            _hasData   = false;
+            return false;
+        }
+        startNetworkThread();
+    }
+
+    auto t0 = std::chrono::steady_clock::now();
+
+    int buf = _latestReadyBuf.load(std::memory_order_acquire);
+    if (buf < 0) {
+        // Connected, handshake done, but no frame announced yet — normal for
+        // the first few milliseconds after connecting.
+        _hasData = false;
+        return true;
+    }
+
+    _currentBufIdx  = buf;
+    _currentNLive   = _latestNLive.load(std::memory_order_relaxed);
+    _currentFrameId = _latestFrameId.load(std::memory_order_relaxed);
+    _hasData        = true;
+
+    auto t1 = std::chrono::steady_clock::now();
+    _beginFrameMsThisFrame = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -359,7 +445,9 @@ bool sibr::GaussianLiveViewV42::fetchFromPython()
 void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
                                               const sibr::Camera& eye)
 {
-    if (!_mlpLoaded || !_hasData || _N_live == 0) return;
+    if (!_mlpLoaded || !_hasData || _currentBufIdx < 0 || _currentNLive == 0) return;
+
+    IpcBuffer& buf = _buffers[_currentBufIdx];
 
     uint w = (uint)_resolution.x();
     uint h = (uint)_resolution.y();
@@ -378,20 +466,22 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     float tan_fovy = std::tan(eye.fovy() * 0.5f);
     float tan_fovx = tan_fovy * eye.aspect();
 
-    // ── Wait for Python to finish writing IPC buffer ──────────────────────────
-    // TCP ordering guarantees the event was recorded before Python sent N_live,
-    // and we received N_live before reaching here. This call returns immediately.
-    CUDA_CHECK(cudaEventSynchronize(_ipc_event));
+    // ── Wait for Python to finish writing this buffer ─────────────────────────
+    // TCP ordering guarantees the event was recorded before Python's announcement
+    // was sent, and we received the announcement before reaching here. This call
+    // returns immediately.
+    CUDA_CHECK(cudaEventSynchronize(buf.dataReadyEvt));
 
     // ── Run Color MLP on IPC data (zero-copy) ─────────────────────────────────
+    auto t_mlp0 = std::chrono::steady_clock::now();
     {
         auto dev  = torch::Device(torch::kCUDA, _device);
         auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(dev);
 
         // from_blob: LibTorch wraps the IPC pointer without owning it.
-        auto feat_t = torch::from_blob(_ipc_feat_ptr,  {_N_live, _K},    opts);
-        auto xyz_t  = torch::from_blob(_ipc_xyz_ptr,   {_N_live, 3},     opts);
-        auto rbwd_t = torch::from_blob(_ipc_rbwd_ptr,  {_N_live, 3, 3},  opts);
+        auto feat_t = torch::from_blob(buf.featPtr,  {_currentNLive, _K},    opts);
+        auto xyz_t  = torch::from_blob(buf.xyzPtr,   {_currentNLive, 3},     opts);
+        auto rbwd_t = torch::from_blob(buf.rbwdPtr,  {_currentNLive, 3, 3},  opts);
 
         sibr::Vector3f pos = eye.position();
         auto cam_t = torch::tensor({pos.x(), pos.y(), pos.z()}, opts);
@@ -401,6 +491,11 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
                               .toTensor()
                               .contiguous();   // [N_live, 3] on CUDA
     }
+    // LibTorch CUDA ops are async — sync before reading elapsed time, same
+    // correctness requirement as the Python-side deform timing.
+    CUDA_CHECK(cudaDeviceSynchronize());
+    auto t_mlp1 = std::chrono::steady_clock::now();
+    _mlpMsAccum += std::chrono::duration<double, std::milli>(t_mlp1 - t_mlp0).count();
 
     float* colors_ptr = _colors_t.data_ptr<float>();
 
@@ -416,24 +511,28 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     }
 
     // ── Rasterize (reads xyz, opa, scale, rot directly from IPC buffer) ───────
+    auto t_raster0 = std::chrono::steady_clock::now();
     CudaRasterizer::Rasterizer::forward(
         _geomBuf, _binBuf, _imgBuf,
-        _N_live, /*D=*/0, /*M=*/0,
+        _currentNLive, /*D=*/0, /*M=*/0,
         _bg_cuda,
         (int)w, (int)h,
-        _ipc_xyz_ptr,          // positions (IPC, zero-copy)
+        buf.xyzPtr,            // positions (IPC, zero-copy)
         /*shs=*/nullptr,
         colors_ptr,            // per-eye precomputed RGB from Color MLP
-        _ipc_opa_ptr,          // opacity (IPC, zero-copy)
-        _ipc_scale_ptr,        // scale (IPC, zero-copy)
+        buf.opaPtr,            // opacity (IPC, zero-copy)
+        buf.scalePtr,          // scale (IPC, zero-copy)
         /*scale_modifier=*/1.0f,
-        _ipc_rot_ptr,          // rotation quaternion (IPC, zero-copy)
+        buf.rotPtr,            // rotation quaternion (IPC, zero-copy)
         /*cov3D_precomp=*/nullptr,
         _view_cuda, _proj_cuda, _camPos_cuda,
         tan_fovx, tan_fovy,
         /*prefiltered=*/false,
         image_cuda
     );
+    CUDA_CHECK(cudaDeviceSynchronize());
+    auto t_raster1 = std::chrono::steady_clock::now();
+    _rasterMsAccum += std::chrono::duration<double, std::milli>(t_raster1 - t_raster0).count();
 
     // ── Unmap and blit ────────────────────────────────────────────────────────
     if (!_interopFailed) {
@@ -463,17 +562,47 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     _copyShader.end();
 
     CHECK_GL_ERROR;
+
+    // onRenderIBR is called once per eye (left, then right) per frame. Once
+    // both eyes are done, this buffer slot is safe to overwrite — record the
+    // read-complete event so Python's wait_read_complete() can unblock and
+    // reuse this slot for a future frame. Log the per-frame total — mlp/raster
+    // summed across both eyes — once every other call, matching Python's
+    // _LOG_INTERVAL=60 cadence.
+    _eyeCallsThisFrame++;
+    if (_eyeCallsThisFrame >= 2)
+    {
+        _eyeCallsThisFrame = 0;
+        CUDA_CHECK(cudaEventRecord(buf.readCompleteEvt, 0));
+
+        _frameCount++;
+        if (_frameCount % kLogIntervalFrames == 0 || _frameCount <= 3)
+        {
+            SIBR_LOG << "[V42] frame " << _frameCount
+                     << "  pyFrameId=" << _currentFrameId
+                     << "  buf=" << _currentBufIdx
+                     << "  beginFrame=" << _beginFrameMsThisFrame << "ms"
+                     << "  mlp(L+R)=" << _mlpMsAccum << "ms"
+                     << "  raster(L+R)=" << _rasterMsAccum << "ms"
+                     << "  render_total=" << (_mlpMsAccum + _rasterMsAccum) << "ms"
+                     << std::endl;
+        }
+        _mlpMsAccum    = 0.0;
+        _rasterMsAccum = 0.0;
+    }
 }
 
 void sibr::GaussianLiveViewV42::onGUI()
 {
     if (ImGui::Begin("GaussianLiveViewV42")) {
-        ImGui::Text("v4.2 — zero-copy CUDA IPC transport");
-        ImGui::Text("Gaussians (live): %d / %d", _N_live, _N_max);
+        ImGui::Text("v4.2 — zero-copy CUDA IPC transport (double-buffered, pipelined)");
+        ImGui::Text("Gaussians (live): %d / %d", _currentNLive, _N_max);
         ImGui::Text("Feat dim K      : %d",  _K);
         ImGui::Text("Connected       : %s",  _connected     ? "yes" : "no");
         ImGui::Text("MLP loaded      : %s",  _mlpLoaded     ? "yes" : "no");
-        ImGui::Text("IPC ready       : %s",  (_ipc_ptr != nullptr) ? "yes" : "no");
+        ImGui::Text("IPC ready       : %s",  (_buffers[0].ptr != nullptr && _buffers[1].ptr != nullptr) ? "yes" : "no");
+        ImGui::Text("Current buffer  : %d",  _currentBufIdx);
+        ImGui::Text("Python frame id : %llu", (unsigned long long)_currentFrameId);
     }
     ImGui::End();
 }
