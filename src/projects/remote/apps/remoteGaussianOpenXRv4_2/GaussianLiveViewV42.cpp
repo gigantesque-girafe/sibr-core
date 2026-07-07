@@ -452,6 +452,19 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     uint w = (uint)_resolution.x();
     uint h = (uint)_resolution.y();
 
+    // One-shot ground-truth log: where is the eye camera in the same world the
+    // avatar lives in (recentered to origin), and where does it look? Useful when
+    // re-tuning seatOffset for a new headset/runtime/reference-space.
+    static bool s_camLogged = false;
+    if (!s_camLogged) {
+        s_camLogged = true;
+        sibr::Vector3f p = eye.position();
+        sibr::Vector3f d = eye.dir();
+        SIBR_LOG << "[V42] CAM world pos=(" << p.x() << ", " << p.y() << ", " << p.z()
+                 << ")  dir=(" << d.x() << ", " << d.y() << ", " << d.z()
+                 << ")  (avatar centered at origin, ~1.66m tall)" << std::endl;
+    }
+
     // ── View / projection matrices ────────────────────────────────────────────
     auto view_mat = eye.view();
     auto proj_mat = eye.viewproj();

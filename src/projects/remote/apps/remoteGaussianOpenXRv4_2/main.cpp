@@ -64,25 +64,24 @@ int main(int ac, char** av)
 
     auto openxrMode = std::make_shared<OpenXRRdrMode>(window);
     // OpenXRRdrMode's "seated" mode (default) anchors the headset's tracked
-    // pose by translating it (world-space add, see Transform3::translate) by
-    // this camera's position each frame. The right height depends on the
-    // scene's coordinate convention and avatar placement, which we can't see
-    // from here — manual keyboard tuning requires alternating between the
-    // headset and the PC, and taking the Quest off puts it to sleep and kills
-    // the Steam Link session. So instead: auto-sweep through a range of
-    // heights, holding each for a few seconds, no PC interaction needed.
-    // Avatar's measured canonical-mesh Y extent is ~1.44 (see bbox probe),
-    // so sweep well past that on both sides to be safe.
-    static const float kHoldSeconds = 4.f;
-    static const float kYMin = -2.0f, kYMax = 2.0f, kYStep = 0.2f;
-    static std::vector<float> ySteps = [] {
-        std::vector<float> v;
-        for (float y = kYMin; y <= kYMax + 1e-4f; y += kYStep) v.push_back(y);
-        return v;
-    }();
-    static sibr::Vector3f seatOffset(0.f, kYMin, 2.5f);
-    static auto sweepStart = std::chrono::steady_clock::now();
-    static int lastStepIdx = -1;
+    // pose by translating it by this camera's position each frame. Under the
+    // Meta/Oculus runtime the reference space is STAGE (floor origin) and, after
+    // the renderer's Y/Z flip, the eye camera looks toward +Z — so the avatar
+    // (recentered to the world origin in render_vr_v4_2.py) must sit at NEGATIVE
+    // Z to be in front of the viewer. The old +2.5 put it behind the camera.
+    //
+    // seatOffset is now adjustable live from the keyboard so it can be dialed in
+    // by watching the desktop mirror window (no headset needed):
+    //   A/D : move viewer -X / +X        W/S : move viewer -Z / +Z (closer/farther)
+    //   Q/E : move viewer -Y / +Y (down/up)   R : reset to default
+    // The current value is printed to the console whenever it changes.
+    // Under STAGE (floor origin) the eye sits at Y ~= +1.05 (head height); the
+    // renderer flips Y, so seatOffset.y must be ~ +1.05 to bring the camera back
+    // to the avatar's mid-height. Z is negative so the avatar (world origin) is
+    // in front. Fine-tune live with the keys below.
+    static sibr::Vector3f seatOffset(0.f, 1.05f, -2.5f);
+    static const sibr::Vector3f kSeatDefault = seatOffset;
+    static const float kSeatStep = 0.2f;
 
     MultiViewManager::IBRViewUpdateFunc fixedCam =
         [](sibr::ViewBase::Ptr&, sibr::Input&, const sibr::Viewport&, const float) {
@@ -97,8 +96,9 @@ int main(int ac, char** av)
     );
     multiViewManager.renderingMode(openxrMode);
 
-    SIBR_LOG << "[V42] Auto-sweeping seat height Y from " << kYMin << " to " << kYMax
-             << " (" << kHoldSeconds << "s per step, " << ySteps.size() << " steps, loops forever)" << std::endl;
+    SIBR_LOG << "[V42] Seat offset keyboard control: A/D=X  W/S=Z  Q/E=Y  R=reset. "
+             << "Start = (" << seatOffset.x() << ", " << seatOffset.y() << ", " << seatOffset.z()
+             << "). Watch the desktop mirror to dial the avatar into view." << std::endl;
 
     while (window.isOpened())
     {
@@ -108,18 +108,23 @@ int main(int ac, char** av)
         if (sibr::Input::global().key().isPressed(sibr::Key::Escape))
             window.close();
 
-        // Auto-sweep seat height: no PC/keyboard interaction needed while wearing the headset.
+        // Live seat-offset tuning (discrete step per key press). Watch the
+        // desktop mirror window: it shows exactly what each eye sees, so the
+        // avatar can be framed without wearing the headset.
         {
-            float elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - sweepStart).count();
-            int idx = static_cast<int>(elapsed / kHoldSeconds) % static_cast<int>(ySteps.size());
-            if (idx != lastStepIdx)
+            auto& kb = sibr::Input::global().key();
+            sibr::Vector3f before = seatOffset;
+            if (kb.isPressed(sibr::Key::D)) seatOffset.x() += kSeatStep;
+            if (kb.isPressed(sibr::Key::A)) seatOffset.x() -= kSeatStep;
+            if (kb.isPressed(sibr::Key::E)) seatOffset.y() += kSeatStep;
+            if (kb.isPressed(sibr::Key::Q)) seatOffset.y() -= kSeatStep;
+            if (kb.isPressed(sibr::Key::S)) seatOffset.z() += kSeatStep;
+            if (kb.isPressed(sibr::Key::W)) seatOffset.z() -= kSeatStep;
+            if (kb.isPressed(sibr::Key::R)) seatOffset = kSeatDefault;
+            if (seatOffset != before)
             {
-                lastStepIdx = idx;
-                seatOffset.y() = ySteps[idx];
-                auto now = std::chrono::system_clock::now();
-                auto t = std::chrono::system_clock::to_time_t(now);
-                SIBR_LOG << "[V42] " << std::put_time(std::localtime(&t), "%H:%M:%S")
-                         << " seatOffset.y = " << seatOffset.y() << std::endl;
+                SIBR_LOG << "[V42] seatOffset = (" << seatOffset.x() << ", "
+                         << seatOffset.y() << ", " << seatOffset.z() << ")" << std::endl;
             }
         }
 

@@ -168,7 +168,12 @@ private:
     float*                  _fallbackCuda = nullptr;
     std::vector<float>      _fallbackBytes;
     bool _interopFailed = false;
-    bool _useInterop    = true;
+    // Forced OFF: on this machine CUDA-GL interop registers successfully but the
+    // rasterizer's writes don't land in the GL buffer (black image despite the
+    // raster kernel running). The fallback path (cudaMemcpy device->host ->
+    // glNamedBufferSubData) is slower but correct. Set back to true to re-test
+    // interop once the display path is confirmed working.
+    bool _useInterop    = false;
 
     // Copy shader (float SSBO → render target)
     sibr::GLShader        _copyShader;
