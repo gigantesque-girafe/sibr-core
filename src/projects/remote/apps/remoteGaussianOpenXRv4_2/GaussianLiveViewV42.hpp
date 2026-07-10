@@ -6,7 +6,7 @@
  * Differences from v4.0 (GaussianLiveViewV4):
  *   - No per-frame TCP bulk transfer. Gaussian attributes live in two shared CUDA IPC
  *     buffers pre-allocated by Python at startup (double-buffered for pipelining).
- *   - Startup handshake: sends b"V42D", receives N_max + K + TorchScript model + IPC
+ *   - Startup handshake: sends b"V42E", receives N_max + K + TorchScript model + IPC
  *     handles for both buffers.
  *   - Per-frame (pipelined, not ping-pong): Python free-runs, alternately writing into
  *     buffer 0 / buffer 1 and announcing each over TCP (frame_id, buf_idx, N_live) without
@@ -21,13 +21,15 @@
  *     alternating turns on a single buffer.
  *   - No cudaMalloc per-Gaussian buffers in C++; all attribute storage is in Python's IPC buffers.
  *
- * IPC buffer layout (float32, base pointer = ipc_base + ipc_offset), same for each of the 2 buffers:
+ * IPC buffer layout (float32, base pointer = ipc_base + ipc_offset), same for each of the 2 buffers.
+ * Wire v2 (handshake magic "V42E"): the tail is a precomputed 3D covariance
+ * instead of scale+rot, so the rasterizer runs its cov3D_precomp path and the
+ * splats match the Python reference renderer (render.py, compute_cov3D_python=True):
  *   [N_max * 3]      xyz
  *   [N_max * K]      feat    (view-independent features)
  *   [N_max * 9]      R_bwd   (backward rotation, row-major 3×3)
  *   [N_max * 1]      opacity
- *   [N_max * 3]      scale
- *   [N_max * 4]      rot     (unit quaternion)
+ *   [N_max * 6]      cov3D   (posed covariance upper triangle [00,01,02,11,12,22])
  *
  * Call once per frame: view->beginFrame();
  * Called per eye by OpenXRRdrMode: view->onRenderIBR(dst, eyeCam);
@@ -94,7 +96,7 @@ public:
 
 private:
     bool connectTCP();
-    bool handshakeWithPython();   // sends V42D, receives IPC metadata + model for both buffers
+    bool handshakeWithPython();   // sends V42E, receives IPC metadata + model for both buffers
     void recreateImageBuffer(uint w, uint h);
     void initShader();
     void startNetworkThread();
@@ -128,8 +130,7 @@ private:
         float* featPtr  = nullptr;
         float* rbwdPtr  = nullptr;
         float* opaPtr   = nullptr;
-        float* scalePtr = nullptr;
-        float* rotPtr   = nullptr;
+        float* covPtr   = nullptr;   // cov3D_precomp (6 floats/Gaussian)
     };
     IpcBuffer _buffers[2];
 
@@ -168,11 +169,12 @@ private:
     float*                  _fallbackCuda = nullptr;
     std::vector<float>      _fallbackBytes;
     bool _interopFailed = false;
-    // Forced OFF: on this machine CUDA-GL interop registers successfully but the
-    // rasterizer's writes don't land in the GL buffer (black image despite the
-    // raster kernel running). The fallback path (cudaMemcpy device->host ->
-    // glNamedBufferSubData) is slower but correct. Set back to true to re-test
-    // interop once the display path is confirmed working.
+    // OFF by default (a previous run saw a black image with interop on: the
+    // rasterizer's writes didn't land in the GL buffer). The host-copy fallback
+    // (cudaMemcpy D2H -> glNamedBufferSubData) is slower but correct. Set env
+    // V42_INTEROP=1 to attempt zero-copy interop; recreateImageBuffer() then logs
+    // the GL/CUDA device mapping and the real register error so it can be
+    // diagnosed rather than silently falling back.
     bool _useInterop    = false;
 
     // Copy shader (float SSBO → render target)
@@ -196,6 +198,16 @@ private:
     double _rasterMsAccum         = 0.0;
     int    _eyeCallsThisFrame     = 0;
     int    _frameCount            = 0;
+
+    // Per-stage GPU timing via CUDA events. OFF by default so the hot path
+    // never issues a cudaDeviceSynchronize (which would drain the whole context
+    // and serialize the two eyes / re-couple with Python's work). Enable by
+    // setting env var V42_TIMING=1 to measure mlp/raster ms with events instead.
+    bool        _timingEnabled   = false;
+    cudaEvent_t _evtMlpStart      = nullptr;
+    cudaEvent_t _evtMlpStop       = nullptr;
+    cudaEvent_t _evtRasterStart   = nullptr;
+    cudaEvent_t _evtRasterStop    = nullptr;
 };
 
 } // namespace sibr

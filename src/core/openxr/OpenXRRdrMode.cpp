@@ -11,6 +11,9 @@
 #include <core/assets/Resources.hpp>
 #include <core/openxr/OpenXRRdrMode.hpp>
 #include <core/openxr/SwapchainImageRenderTarget.hpp>
+#include <core/system/Config.hpp>
+
+#include <chrono>
 
 namespace sibr
 {
@@ -89,7 +92,13 @@ namespace sibr
 
         // Get next pose prediction for rendering
         m_openxrHmd->pollEvents();
-        if (!m_openxrHmd->waitNextFrame())
+
+        // waitNextFrame() is xrWaitFrame: the compositor throttle. The app is
+        // BLOCKED here (GPU idle) until the runtime grants the next frame slot.
+        auto _t_wait0 = std::chrono::steady_clock::now();
+        bool _waitOk = m_openxrHmd->waitNextFrame();
+        auto _t_wait1 = std::chrono::steady_clock::now();
+        if (!_waitOk)
         {
             return;
         }
@@ -100,6 +109,9 @@ namespace sibr
         // Prepare the view to render at a specific resolution
         view.setResolution(sibr::Vector2i(w / m_downscaleResolution, h / m_downscaleResolution));
 
+        // submitFrame() runs the per-eye callback (2x onRenderIBR) + mirror blit
+        // and then xrEndFrame (submit to compositor) — this is the real work.
+        auto _t_sub0 = std::chrono::steady_clock::now();
         // The callback is called for each single view (left view then right view) with the texture to render to
         m_openxrHmd->submitFrame([this, w, h, &view, &camera, optDest](int viewIndex, uint32_t texture)
                                  {
@@ -184,6 +196,23 @@ namespace sibr
                                          optDest->unbind();
                                      }
                                  });
+        auto _t_sub1 = std::chrono::steady_clock::now();
+
+        // ── Frame-pacing breakdown (every 60 frames) ────────────────────────────
+        // If waitNextFrame >> submitFrame, you are compositor-throttled (ASW pacing
+        // you to a submultiple of the headset rate) with GPU headroom to spare —
+        // the fix is to get total work under the next tier, not raw GPU speed.
+        // If submitFrame dominates and wait ~0, you are genuinely compute-bound.
+        {
+            double _wait_ms = std::chrono::duration<double, std::milli>(_t_wait1 - _t_wait0).count();
+            double _sub_ms  = std::chrono::duration<double, std::milli>(_t_sub1 - _t_sub0).count();
+            static int _fc = 0;
+            if (++_fc % 60 == 0)
+                SIBR_LOG << "[OpenXR] frame " << _fc
+                         << "  waitNextFrame(throttle)=" << _wait_ms << "ms"
+                         << "  submitFrame(work)=" << _sub_ms << "ms"
+                         << "  loop~=" << (_wait_ms + _sub_ms) << "ms" << std::endl;
+        }
     }
 
     void OpenXRRdrMode::onGui()

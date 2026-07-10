@@ -102,6 +102,12 @@ int main(int ac, char** av)
 
     while (window.isOpened())
     {
+        // Full render-loop wall time — this is what the on-screen FPS counter
+        // reports. It equals waitNextFrame(throttle) + submitFrame(work) +
+        // beginFrame + swapBuffer + input/UI. Compare against the [OpenXR] and
+        // [V42] render_total lines to see where the frame time actually goes.
+        auto _loop0 = std::chrono::steady_clock::now();
+
         sibr::Input::poll();
         window.makeContextCurrent();
 
@@ -137,6 +143,16 @@ int main(int ac, char** av)
 
         window.swapBuffer();
         CHECK_GL_ERROR;
+
+        auto _loop1 = std::chrono::steady_clock::now();
+        {
+            double _loop_ms = std::chrono::duration<double, std::milli>(_loop1 - _loop0).count();
+            static int _fc = 0;
+            if (++_fc % 60 == 0)
+                SIBR_LOG << "[V42] main-loop frame " << _fc << "  loop=" << _loop_ms
+                         << "ms  (== on-screen frame time; " << (1000.0 / _loop_ms)
+                         << " FPS)" << std::endl;
+        }
     }
 
     return EXIT_SUCCESS;

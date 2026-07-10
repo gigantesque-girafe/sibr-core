@@ -32,6 +32,7 @@
 #include <GL/glew.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -145,8 +146,32 @@ sibr::GaussianLiveViewV42::GaussianLiveViewV42(
     _binBuf  = resizeFunctional(&_binPtr,  _allocBin);
     _imgBuf  = resizeFunctional(&_imgPtr,  _allocImg);
 
+    // CUDA-GL interop is ON by default (zero-copy: rasterizer writes straight into
+    // the mapped GL buffer, no D2H+H2D round trip). Set env V42_INTEROP=0 to force
+    // the host-copy fallback. recreateImageBuffer() logs the real register error
+    // and whether the GL context is on the same CUDA device as the rasterizer, so
+    // a failure can still be diagnosed.
+    {
+        const char* io = std::getenv("V42_INTEROP");
+        _useInterop = (io == nullptr) || (io[0] != '0');
+    }
+
     recreateImageBuffer(render_w, render_h);
     initShader();
+
+    // Optional per-stage GPU timing (env V42_TIMING=1). Off by default so the
+    // render hot path issues no cudaDeviceSynchronize at all.
+    {
+        const char* t = std::getenv("V42_TIMING");
+        _timingEnabled = (t != nullptr && t[0] != '\0' && t[0] != '0');
+    }
+    if (_timingEnabled) {
+        CUDA_CHECK(cudaEventCreate(&_evtMlpStart));
+        CUDA_CHECK(cudaEventCreate(&_evtMlpStop));
+        CUDA_CHECK(cudaEventCreate(&_evtRasterStart));
+        CUDA_CHECK(cudaEventCreate(&_evtRasterStop));
+        SIBR_LOG << "[V42] Per-stage GPU timing ENABLED (V42_TIMING)." << std::endl;
+    }
 
     SIBR_LOG << "[V42] Connecting to Python at " << ip << ":" << port << std::endl;
     connectTCP();
@@ -178,6 +203,11 @@ sibr::GaussianLiveViewV42::~GaussianLiveViewV42()
     if (_geomPtr) cudaFree(_geomPtr);
     if (_binPtr)  cudaFree(_binPtr);
     if (_imgPtr)  cudaFree(_imgPtr);
+
+    if (_evtMlpStart)    cudaEventDestroy(_evtMlpStart);
+    if (_evtMlpStop)     cudaEventDestroy(_evtMlpStop);
+    if (_evtRasterStart) cudaEventDestroy(_evtRasterStart);
+    if (_evtRasterStop)  cudaEventDestroy(_evtRasterStop);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,15 +234,51 @@ void sibr::GaussianLiveViewV42::recreateImageBuffer(uint w, uint h)
         nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     if (_useInterop) {
-        cudaGraphicsGLRegisterBuffer(&_cudaBuffer, _glBuffer,
-                                     cudaGraphicsRegisterFlagsWriteDiscard);
-        _useInterop = (cudaGetLastError() == cudaSuccess);
+        // Which CUDA device backs the *current GL context*? If it isn't the device
+        // the rasterizer runs on (_device), interop registers OK but the mapped
+        // pointer is cross-device and the CUDA writes never reach the GL buffer —
+        // the classic "registers, then black". cudaGLGetDevices needs the GL
+        // context current (it is here — this runs on the render thread).
+        unsigned int glDevCount = 0;
+        int          glDevs[8]  = {0};
+        cudaError_t de = cudaGLGetDevices(&glDevCount, glDevs, 8, cudaGLDeviceListAll);
+        if (de == cudaSuccess && glDevCount > 0) {
+            std::ostringstream oss;
+            bool match = false;
+            for (unsigned int i = 0; i < glDevCount; ++i) {
+                oss << glDevs[i] << (i + 1 < glDevCount ? "," : "");
+                if (glDevs[i] == _device) match = true;
+            }
+            SIBR_LOG << "[V42] GL context is on CUDA device(s) [" << oss.str()
+                     << "]; rasterizer uses device " << _device << "." << std::endl;
+            if (!match)
+                SIBR_LOG << "[V42] *** DEVICE MISMATCH *** GL context and CUDA device "
+                            "differ — interop writes will land on the wrong GPU (black "
+                            "image). Run the rasterizer on the GL device instead." << std::endl;
+        } else {
+            SIBR_LOG << "[V42] cudaGLGetDevices failed (" << cudaGetErrorString(de)
+                     << ") — current GL context may not be CUDA-interop capable "
+                        "(remote session, wrong adapter, or OpenXR-owned context)." << std::endl;
+            cudaGetLastError();  // clear sticky error
+        }
+
+        cudaError_t re = cudaGraphicsGLRegisterBuffer(
+            &_cudaBuffer, _glBuffer, cudaGraphicsRegisterFlagsWriteDiscard);
+        if (re != cudaSuccess) {
+            SIBR_LOG << "[V42] cudaGraphicsGLRegisterBuffer FAILED: "
+                     << cudaGetErrorString(re) << " — falling back." << std::endl;
+            cudaGetLastError();  // clear sticky error
+            _useInterop = false;
+        } else {
+            SIBR_LOG << "[V42] CUDA-GL interop ENABLED (buffer registered)." << std::endl;
+        }
     }
     if (!_useInterop) {
         _interopFailed = true;
         _fallbackBytes.resize(w * h * 3 * sizeof(float));
         cudaMalloc(&_fallbackCuda, _fallbackBytes.size());
-        SIBR_LOG << "[V42] CUDA-GL interop unavailable, using fallback." << std::endl;
+        SIBR_LOG << "[V42] Using host-copy fallback (D2H + glNamedBufferSubData). "
+                    "Set V42_INTEROP=1 to attempt zero-copy interop." << std::endl;
     }
 }
 
@@ -244,8 +310,10 @@ bool sibr::GaussianLiveViewV42::connectTCP()
 bool sibr::GaussianLiveViewV42::handshakeWithPython()
 {
     try {
-        // 1. Send 4-byte magic (V42D = double-buffer pipelined protocol)
-        const char magic[4] = {'V','4','2','D'};
+        // 1. Send 4-byte magic (V42E = double-buffer pipelined protocol, wire v2:
+        //    cov3D[6] tail instead of scale[3]+rot[4]). Bumping the magic makes an
+        //    old Python server refuse the connection loudly rather than mis-parse.
+        const char magic[4] = {'V','4','2','E'};
         boost::asio::write(*_socket, boost::asio::buffer(magic, 4));
 
         // 2. Receive N_max, K, model_size
@@ -295,21 +363,20 @@ bool sibr::GaussianLiveViewV42::handshakeWithPython()
             CUDA_CHECK(cudaIpcOpenEventHandle(&b.readCompleteEvt, read_complete_handle));
 
             // Pre-compute field pointers into this buffer.
-            // Layout: xyz[N_max*3] | feat[N_max*K] | R_bwd[N_max*9] | opa[N_max] | scale[N_max*3] | rot[N_max*4]
+            // Layout: xyz[N_max*3] | feat[N_max*K] | R_bwd[N_max*9] | opa[N_max] | cov3D[N_max*6]
             ptrdiff_t off = 0;
             b.xyzPtr   = b.ptr + off; off += (ptrdiff_t)_N_max * 3;
             b.featPtr  = b.ptr + off; off += (ptrdiff_t)_N_max * _K;
             b.rbwdPtr  = b.ptr + off; off += (ptrdiff_t)_N_max * 9;
             b.opaPtr   = b.ptr + off; off += (ptrdiff_t)_N_max * 1;
-            b.scalePtr = b.ptr + off; off += (ptrdiff_t)_N_max * 3;
-            b.rotPtr   = b.ptr + off;
+            b.covPtr   = b.ptr + off;   // cov3D_precomp (6 floats/Gaussian)
 
             SIBR_LOG << "[V42] Buffer " << i << " ready. ipc_offset=" << ipc_offset
                      << "  src_device=" << src_device << std::endl;
         }
 
         SIBR_LOG << "[V42] Both IPC buffers ready. Total floats per buffer: "
-                 << (ptrdiff_t)_N_max * (_K + 20) << std::endl;
+                 << (ptrdiff_t)_N_max * (_K + 19) << std::endl;
 
         _handshakeDone = true;
         return true;
@@ -486,7 +553,10 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     CUDA_CHECK(cudaEventSynchronize(buf.dataReadyEvt));
 
     // ── Run Color MLP on IPC data (zero-copy) ─────────────────────────────────
-    auto t_mlp0 = std::chrono::steady_clock::now();
+    // No device sync here: the MLP output and the rasterizer below run on the
+    // same (default) stream, so ordering is guaranteed without draining the GPU.
+    // Timing, when enabled, is done with CUDA events (measured, not blocking).
+    if (_timingEnabled) CUDA_CHECK(cudaEventRecord(_evtMlpStart, 0));
     {
         auto dev  = torch::Device(torch::kCUDA, _device);
         auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(dev);
@@ -504,11 +574,7 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
                               .toTensor()
                               .contiguous();   // [N_live, 3] on CUDA
     }
-    // LibTorch CUDA ops are async — sync before reading elapsed time, same
-    // correctness requirement as the Python-side deform timing.
-    CUDA_CHECK(cudaDeviceSynchronize());
-    auto t_mlp1 = std::chrono::steady_clock::now();
-    _mlpMsAccum += std::chrono::duration<double, std::milli>(t_mlp1 - t_mlp0).count();
+    if (_timingEnabled) CUDA_CHECK(cudaEventRecord(_evtMlpStop, 0));
 
     float* colors_ptr = _colors_t.data_ptr<float>();
 
@@ -523,8 +589,11 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
         image_cuda = _fallbackCuda;
     }
 
-    // ── Rasterize (reads xyz, opa, scale, rot directly from IPC buffer) ───────
-    auto t_raster0 = std::chrono::steady_clock::now();
+    // ── Rasterize (reads xyz, opa, cov3D directly from IPC buffer) ────────────
+    // Uses the cov3D_precomp path (scales/rotations = nullptr) so the splat shape
+    // matches render.py exactly — the covariance already encodes the posed LBS
+    // scale/shear that a scale+quaternion pair would lose.
+    if (_timingEnabled) CUDA_CHECK(cudaEventRecord(_evtRasterStart, 0));
     CudaRasterizer::Rasterizer::forward(
         _geomBuf, _binBuf, _imgBuf,
         _currentNLive, /*D=*/0, /*M=*/0,
@@ -534,18 +603,29 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
         /*shs=*/nullptr,
         colors_ptr,            // per-eye precomputed RGB from Color MLP
         buf.opaPtr,            // opacity (IPC, zero-copy)
-        buf.scalePtr,          // scale (IPC, zero-copy)
+        /*scales=*/nullptr,    // using cov3D_precomp instead
         /*scale_modifier=*/1.0f,
-        buf.rotPtr,            // rotation quaternion (IPC, zero-copy)
-        /*cov3D_precomp=*/nullptr,
+        /*rotations=*/nullptr,
+        buf.covPtr,            // cov3D_precomp (IPC, zero-copy)
         _view_cuda, _proj_cuda, _camPos_cuda,
         tan_fovx, tan_fovy,
         /*prefiltered=*/false,
         image_cuda
     );
-    CUDA_CHECK(cudaDeviceSynchronize());
-    auto t_raster1 = std::chrono::steady_clock::now();
-    _rasterMsAccum += std::chrono::duration<double, std::milli>(t_raster1 - t_raster0).count();
+    if (_timingEnabled) CUDA_CHECK(cudaEventRecord(_evtRasterStop, 0));
+
+    // Accumulate per-stage GPU times from the events. cudaEventElapsedTime needs
+    // the stop event complete, so we sync ONLY on it (a single stream sync, not a
+    // full-device drain). When timing is off, nothing here blocks — the GL unmap
+    // / fallback D2H copy below provides the only (necessary) synchronization.
+    if (_timingEnabled) {
+        CUDA_CHECK(cudaEventSynchronize(_evtRasterStop));
+        float mlp_ms = 0.f, raster_ms = 0.f;
+        CUDA_CHECK(cudaEventElapsedTime(&mlp_ms,    _evtMlpStart,    _evtMlpStop));
+        CUDA_CHECK(cudaEventElapsedTime(&raster_ms, _evtRasterStart, _evtRasterStop));
+        _mlpMsAccum    += mlp_ms;
+        _rasterMsAccum += raster_ms;
+    }
 
     // ── Unmap and blit ────────────────────────────────────────────────────────
     if (!_interopFailed) {
@@ -591,13 +671,19 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
         _frameCount++;
         if (_frameCount % kLogIntervalFrames == 0 || _frameCount <= 3)
         {
+            std::ostringstream timing;
+            if (_timingEnabled) {
+                timing << "  mlp(L+R)=" << _mlpMsAccum << "ms"
+                       << "  raster(L+R)=" << _rasterMsAccum << "ms"
+                       << "  render_total=" << (_mlpMsAccum + _rasterMsAccum) << "ms";
+            } else {
+                timing << "  (stage timing off; set V42_TIMING=1 to measure)";
+            }
             SIBR_LOG << "[V42] frame " << _frameCount
                      << "  pyFrameId=" << _currentFrameId
                      << "  buf=" << _currentBufIdx
                      << "  beginFrame=" << _beginFrameMsThisFrame << "ms"
-                     << "  mlp(L+R)=" << _mlpMsAccum << "ms"
-                     << "  raster(L+R)=" << _rasterMsAccum << "ms"
-                     << "  render_total=" << (_mlpMsAccum + _rasterMsAccum) << "ms"
+                     << timing.str()
                      << std::endl;
         }
         _mlpMsAccum    = 0.0;

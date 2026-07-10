@@ -1,0 +1,227 @@
+Microsoft (R) Build Engine version 16.11.6+a918ceb31 pour .NET Framework
+Copyright (C) Microsoft Corporation. Tous droits r‚serv‚s.
+
+  1>Checking Build System
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/extlibs/CudaRasterizer/CudaRasterizer/CMakeLists.txt
+  CudaRasterizer.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\lib\CudaRasterizer_rwdi.lib
+  imgui.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\lib\imgui_rwdi.lib
+  XMLTree.cpp
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_system_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_system_rwdi.exp
+  sibr_system.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_system_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/graphics/CMakeLists.txt
+  Camera.cpp
+  Frustum.cpp
+  GPUQuery.cpp
+  GUI.cpp
+  Image.cpp
+  Input.cpp
+  MaterialMesh.cpp
+  Mesh.cpp
+  MeshBufferGL.cpp
+  RenderTarget.cpp
+  RenderUtility.cpp
+  Shader.cpp
+  Texture.cpp
+  Utils.cpp
+  Viewport.cpp
+  Window.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Utils.cpp(27,68): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'unsigned char', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Utils.cpp(27,27): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'const unsigned char', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Utils.cpp(28,74): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'unsigned char', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Utils.cpp(28,29): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'const unsigned char', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Utils.cpp(29,73): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'unsigned char', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Utils.cpp(29,28): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'const unsigned char', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(46,27): warning C4267: '='ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(65,21): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(65,19): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(65,17): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(584,36): warning C4244: 'argument'ÿ: conversion de 'float' en 'uint', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(585,107): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(585,84): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(585,61): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(656,22): warning C4018: '<'ÿ: incompatibilit‚ signed/unsigned [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(661,22): warning C4018: '<'ÿ: incompatibilit‚ signed/unsigned [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1280,21): warning C4244: '+='ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1291,34): warning C4244: 'argument'ÿ: conversion de 'unsigned __int64' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1294,9): warning C4834: abandon de la valeur de retour de la fonction ayant l'attribut 'nodiscard' [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1295,98): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1295,67): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1295,36): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\Mesh.cpp(1297,33): warning C4244: 'argument'ÿ: conversion de 'unsigned __int64' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\MaterialMesh.cpp(241,25): warning C4244: '='ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\graphics\RenderUtility.cpp(37): warning C4172: retourne l'adresse d'une variable locale ou : _vBuffer temporaire [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\graphics\sibr_graphics.vcxproj]
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_graphics_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_graphics_rwdi.exp
+  sibr_graphics.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_graphics_rwdi.dll
+  Auto build dll exports
+  xatlas.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\xatlas_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/assets/CMakeLists.txt
+  ActiveImageFile.cpp
+  CameraRecorder.cpp
+  ImageListFile.cpp
+  InputCamera.cpp
+  Resources.cpp
+  UVUnwrapper.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(697,25): warning C4267: 'argument'ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(760,39): warning C4267: 'argument'ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(761,43): warning C4267: 'argument'ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1473,11): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1475,14): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1476,15): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1477,13): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1478,13): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1483,90): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1483,68): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1483,46): warning C4244: 'argument'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1496,44): warning C4244: '='ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1533,14): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\assets\InputCamera.cpp(1548,39): warning C4244: '='ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\assets\sibr_assets.vcxproj]
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_assets_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_assets_rwdi.exp
+  sibr_assets.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_assets_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/raycaster/CMakeLists.txt
+  CameraRaycaster.cpp
+  Intersector2D.cpp
+  PlaneEstimator.cpp
+  Ray.cpp
+  Raycaster.cpp
+  VoxelGrid.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\raycaster\Raycaster.cpp(345,6): warning C4311: 'cast de type'ÿ: troncation de pointeur de 'unsigned int *' … 'uint' [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\raycaster\sibr_raycaster.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\raycaster\Raycaster.cpp(345,6): warning C4302: 'cast de type'ÿ: troncation de 'unsigned int *' … 'uint' [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\raycaster\sibr_raycaster.vcxproj]
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_raycaster_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_raycaster_rwdi.exp
+  sibr_raycaster.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_raycaster_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/scene/CMakeLists.txt
+  BasicIBRScene.cpp
+  CalibratedCameras.cpp
+  InputImages.cpp
+  ParseData.cpp
+  ProxyMesh.cpp
+  RenderTargetTextures.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp(70,33): warning C4267: '='ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp(73,24): warning C4018: '<'ÿ: incompatibilit‚ signed/unsigned [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp(246,137): warning C4267: 'argument'ÿ: conversion de 'size_t' en 'const int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\xutility(135,1): warning C4267: 'argument'ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp) [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\xutility(134): message : voir la r‚f‚rence … l'instanciation de la fonction modŠle '_Ty *std::construct_at<_Ty,int,int,int,int,int,int,unsigned __int64,void>(_Ty *const ,int &&,int &&,int &&,int &&,int &&,int &&,unsigned __int64 &&) noexcept(<expr>)' en cours de compilation [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=sibr::InputCamera
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\memory(2006): message : voir la r‚f‚rence … l'instanciation de la fonction modŠle 'void std::_Construct_in_place<_Ty,int,int,int,int,int,int,unsigned __int64>(_Ty &,int &&,int &&,int &&,int &&,int &&,int &&,unsigned __int64 &&) noexcept(false)' en cours de compilation [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=sibr::InputCamera
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\memory(2725): message : voir la r‚f‚rence … l'instanciation de la fonction modŠle 'std::_Ref_count_obj2<_Ty>::_Ref_count_obj2<int,int,int,int,int,int,unsigned __int64>(int &&,int &&,int &&,int &&,int &&,int &&,unsigned __int64 &&)' en cours de compilation [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=sibr::InputCamera
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\memory(2726): message : voir la r‚f‚rence … l'instanciation de la fonction modŠle 'std::_Ref_count_obj2<_Ty>::_Ref_count_obj2<int,int,int,int,int,int,unsigned __int64>(int &&,int &&,int &&,int &&,int &&,int &&,unsigned __int64 &&)' en cours de compilation [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=sibr::InputCamera
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp(368): message : voir la r‚f‚rence … l'instanciation de la fonction modŠle 'std::shared_ptr<sibr::InputCamera> std::make_shared<sibr::InputCamera,int,int,int,int,int,int,unsigned __int64>(int &&,int &&,int &&,int &&,int &&,int &&,unsigned __int64 &&)' en cours de compilation [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\xutility(135,72): warning C4244: 'argument'ÿ: conversion de '_Ty' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=int
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\xutility(142,1): warning C4267: 'argument'ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp) [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\xutility(149,77): warning C4244: 'argument'ÿ: conversion de '_Ty' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=int
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include\xutility(136,69): warning C4244: 'argument'ÿ: conversion de '_Ty' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\scene\sibr_scene.vcxproj]
+          with
+          [
+              _Ty=int
+          ] (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\scene\ParseData.cpp)
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_scene_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_scene_rwdi.exp
+  sibr_scene.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_scene_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/video/CMakeLists.txt
+  FFmpegVideoEncoder.cpp
+  Video.cpp
+  VideoUtils.cpp
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_video_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_video_rwdi.exp
+  sibr_video.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_video_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/view/CMakeLists.txt
+  DatasetView.cpp
+  FPSCamera.cpp
+  FPSCounter.cpp
+  IBRBasicUtils.cpp
+  ICameraHandler.cpp
+  ImageView.cpp
+  ImagesGrid.cpp
+  InteractiveCameraHandler.cpp
+  MultiMeshManager.cpp
+  MultiViewManager.cpp
+  Orbit.cpp
+  RenderingMode.cpp
+  SceneDebugView.cpp
+  Skybox.cpp
+  TrackBall.cpp
+  UIShortcuts.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\view\FPSCounter.cpp(65,33): warning C4305: 'argument'ÿ: troncation de 'double' … 'float' [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\view\sibr_view.vcxproj]
+  ViewBase.cpp
+  Interface.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\view\InteractiveCameraHandler.cpp(113,22): warning C4244: 'argument'ÿ: conversion de 'unsigned __int64' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\view\sibr_view.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\view\MultiViewManager.cpp(362,58): warning C4244: '='ÿ: conversion de 'float' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\view\sibr_view.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\view\InteractiveCameraHandler.cpp(251,36): warning C4267: 'initialisation'ÿ: conversion de 'size_t' en 'int', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\view\sibr_view.vcxproj]
+  InterfaceUtils.cpp
+  MeshViewer.cpp
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_view_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_view_rwdi.exp
+  sibr_view.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_view_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/openxr/CMakeLists.txt
+  OpenXRHMD.cpp
+  OpenXRRdrMode.cpp
+  SwapchainImageRenderTarget.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(100,20): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(105,21): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(110,19): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(119,18): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(120,18): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(121,18): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(122,18): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(123,18): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(124,18): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(318,9): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRHMD.cpp(320,9): warning C4996: 'strncpy': This function or variable may be unsafe. Consider using strncpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core/openxr/OpenXRRdrMode.hpp(62,37): warning C4244: 'initialisation'ÿ: conversion de 'float' en 'int', perte possible de donn‚es (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp) [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(161,125): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLsizei', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(161,57): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLint', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(162,124): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLsizei', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(162,56): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLint', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(167,103): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLsizei', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(167,57): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLint', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(168,102): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLsizei', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(168,56): warning C4244: 'argument'ÿ: conversion de 'float' en 'GLint', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(216,39): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\openxr\OpenXRRdrMode.cpp(216,33): warning C4244: 'initialisation'ÿ: conversion de 'double' en 'const float', perte possible de donn‚es [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\openxr\sibr_openxr.vcxproj]
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_openxr_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_openxr_rwdi.exp
+  sibr_openxr.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_openxr_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/core/renderer/CMakeLists.txt
+  AddShadowRenderer.cpp
+  BinaryMeshRenderer.cpp
+  BlurRenderer.cpp
+  ColoredMeshRenderer.cpp
+  CopyRenderer.cpp
+  DepthRenderer.cpp
+  NormalRenderer.cpp
+  PointBasedRenderer.cpp
+  PoissonRenderer.cpp
+  PositionRender.cpp
+  RenderMaskHolder.cpp
+  ShadowMapRenderer.cpp
+  TexturedMeshRenderer.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\renderer\PointBasedRenderer.cpp(36,44): warning C4305: 'argument'ÿ: troncation de 'double' … 'const float' [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\renderer\sibr_renderer.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core\renderer\PointBasedRenderer.cpp(54,44): warning C4305: 'argument'ÿ: troncation de 'double' … 'const float' [C:\Users\travu\MISTA\submodules\sibr-core\build\src\core\renderer\sibr_renderer.vcxproj]
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_renderer_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/sibr_renderer_rwdi.exp
+  sibr_renderer.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\sibr_renderer_rwdi.dll
+  Building Custom Rule C:/Users/travu/MISTA/submodules/sibr-core/src/projects/remote/apps/remoteGaussianOpenXRv4_2/CMakeLists.txt
+  GaussianLiveViewV42.cpp
+  main.cpp
+C:\Users\travu\MISTA\submodules\sibr-core\src\projects\remote\apps\remoteGaussianOpenXRv4_2\GaussianLiveViewV42.cpp(155,30): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details. [C:\Users\travu\MISTA\submodules\sibr-core\build\src\projects\remote\apps\remoteGaussianOpenXRv4_2\SIBR_remoteGaussianOpenXRv4_2_app.vcxproj]
+C:\Users\travu\MISTA\submodules\sibr-core\src\core/openxr/OpenXRRdrMode.hpp(62,37): warning C4244: 'initialisation'ÿ: conversion de 'float' en 'int', perte possible de donn‚es (compilation du fichier source C:\Users\travu\MISTA\submodules\sibr-core\src\projects\remote\apps\remoteGaussianOpenXRv4_2\main.cpp) [C:\Users\travu\MISTA\submodules\sibr-core\build\src\projects\remote\apps\remoteGaussianOpenXRv4_2\SIBR_remoteGaussianOpenXRv4_2_app.vcxproj]
+     Cr‚ation de la bibliothŠque C:/Users/travu/MISTA/submodules/sibr-core/install/lib/SIBR_remoteGaussianOpenXRv4_2_app_rwdi.lib et de l'objet C:/Users/travu/MISTA/submodules/sibr-core/install/lib/SIBR_remoteGaussianOpenXRv4_2_app_rwdi.exp
+  SIBR_remoteGaussianOpenXRv4_2_app.vcxproj -> C:\Users\travu\MISTA\submodules\sibr-core\install\bin\SIBR_remoteGaussianOpenXRv4_2_app_rwdi.exe
+  Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/asmjit.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/c10.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/c10_cuda.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/caffe2_nvrtc.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cublas64_11.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cublasLt64_11.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudart64_110.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn_adv_infer64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn_adv_train64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn_cnn_infer64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn_cnn_train64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn_ops_infer64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cudnn_ops_train64_8.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cufft64_10.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cufftw64_10.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cupti64_2022.3.0.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/curand64_10.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cusolver64_11.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cusolverMg64_11.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/cusparse64_11.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/fbgemm.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/libiomp5md.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/libiompstubs5md.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/nvToolsExt64_1.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/nvfuser_codegen.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/nvrtc-builtins64_118.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/nvrtc64_112_0.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/shm.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/torch.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/torch_cpu.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/torch_cuda.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/torch_global_deps.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/torch_python.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/uv.dll to output dir	Copying C:/Users/travu/AppData/Local/miniconda3/envs/3dgs-avatar/Lib/site-packages/torch/lib/zlibwapi.dll to output dir
