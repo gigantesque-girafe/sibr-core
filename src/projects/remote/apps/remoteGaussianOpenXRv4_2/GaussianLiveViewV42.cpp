@@ -114,6 +114,17 @@ static void tcp_recv_all(tcp::socket& sock, void* buf, size_t n)
     boost::asio::read(sock, boost::asio::buffer(buf, n));
 }
 
+static void tcp_send_all(tcp::socket& sock, const void* buf, size_t n)
+{
+    boost::asio::write(sock, boost::asio::buffer(buf, n));
+}
+
+// Identity index -> ZJU-MoCap subject id, for display in the GUI. Must match the
+// dataset order Python decodes from (appearance_identity in render_vr_v1_modular).
+static const int   kNumIdentities   = 8;
+static const char* kSubjectNames[kNumIdentities] =
+    { "386", "387", "377", "392", "315", "394", "393", "390" };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor / Destructor
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,10 +132,11 @@ static void tcp_recv_all(tcp::socket& sock, void* buf, size_t n)
 sibr::GaussianLiveViewV42::GaussianLiveViewV42(
     const std::string& ip, int port,
     uint render_w, uint render_h,
-    bool white_bg, int device)
+    bool white_bg, int device, int views_per_frame)
     : sibr::ViewBase(render_w, render_h)
     , _ip(ip), _port(port)
     , _white_bg(white_bg), _device(device)
+    , _viewsPerFrame(views_per_frame < 1 ? 1 : views_per_frame)
 {
     int num_devices = 0;
     CUDA_CHECK(cudaGetDeviceCount(&num_devices));
@@ -656,14 +668,14 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
 
     CHECK_GL_ERROR;
 
-    // onRenderIBR is called once per eye (left, then right) per frame. Once
-    // both eyes are done, this buffer slot is safe to overwrite — record the
+    // onRenderIBR is called _viewsPerFrame times per Python frame: twice under
+    // OpenXR (left, then right eye), once for a mono desktop window. Once every
+    // view has read this buffer slot it is safe to overwrite — record the
     // read-complete event so Python's wait_read_complete() can unblock and
     // reuse this slot for a future frame. Log the per-frame total — mlp/raster
-    // summed across both eyes — once every other call, matching Python's
-    // _LOG_INTERVAL=60 cadence.
+    // summed across the frame's views — matching Python's _LOG_INTERVAL=60 cadence.
     _eyeCallsThisFrame++;
-    if (_eyeCallsThisFrame >= 2)
+    if (_eyeCallsThisFrame >= _viewsPerFrame)
     {
         _eyeCallsThisFrame = 0;
         CUDA_CHECK(cudaEventRecord(buf.readCompleteEvt, 0));
@@ -691,6 +703,28 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     }
 }
 
+void sibr::GaussianLiveViewV42::sendIdentity(int id)
+{
+    if (id < 0) id = 0;
+    if (id >= kNumIdentities) id = kNumIdentities - 1;
+    if (!_connected || !_socket) {
+        SIBR_LOG << "[V42] sendIdentity(" << id << ") ignored — not connected." << std::endl;
+        return;
+    }
+    // "CTL0" + int32 identity, little-endian (matches vr_viewer.protocol).
+    unsigned char msg[8];
+    std::memcpy(msg, "CTL0", 4);
+    std::memcpy(msg + 4, &id, 4);
+    try {
+        std::lock_guard<std::mutex> lk(_sendMutex);
+        tcp_send_all(*_socket, msg, sizeof(msg));
+        SIBR_LOG << "[V42] sent identity switch -> " << id
+                 << " (subject " << kSubjectNames[id] << ")" << std::endl;
+    } catch (const std::exception& e) {
+        SIBR_LOG << "[V42] sendIdentity failed: " << e.what() << std::endl;
+    }
+}
+
 void sibr::GaussianLiveViewV42::onGUI()
 {
     if (ImGui::Begin("GaussianLiveViewV42")) {
@@ -702,6 +736,34 @@ void sibr::GaussianLiveViewV42::onGUI()
         ImGui::Text("IPC ready       : %s",  (_buffers[0].ptr != nullptr && _buffers[1].ptr != nullptr) ? "yes" : "no");
         ImGui::Text("Current buffer  : %d",  _currentBufIdx);
         ImGui::Text("Python frame id : %llu", (unsigned long long)_currentFrameId);
+
+        // ── Live appearance-identity switch ──────────────────────────────────
+        ImGui::Separator();
+        ImGui::Text("Appearance identity");
+        if (_uiIdentity < 0) _uiIdentity = 0;
+        if (_uiIdentity >= kNumIdentities) _uiIdentity = kNumIdentities - 1;
+        ImGui::Text("Selected: %d  (subject %s)", _uiIdentity, kSubjectNames[_uiIdentity]);
+
+        if (ImGui::Button("< Prev")) {
+            _uiIdentity = (_uiIdentity - 1 + kNumIdentities) % kNumIdentities;
+            sendIdentity(_uiIdentity);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Next >")) {
+            _uiIdentity = (_uiIdentity + 1) % kNumIdentities;
+            sendIdentity(_uiIdentity);
+        }
+
+        // Direct per-identity buttons.
+        for (int i = 0; i < kNumIdentities; ++i) {
+            if (i % 4 != 0) ImGui::SameLine();
+            char label[16];
+            std::snprintf(label, sizeof(label), "%s##id%d", kSubjectNames[i], i);
+            if (ImGui::Button(label)) {
+                _uiIdentity = i;
+                sendIdentity(_uiIdentity);
+            }
+        }
     }
     ImGui::End();
 }

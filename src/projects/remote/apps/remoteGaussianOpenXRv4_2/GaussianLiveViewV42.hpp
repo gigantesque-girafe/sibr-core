@@ -68,6 +68,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -80,9 +81,14 @@ class GaussianLiveViewV42 : public sibr::ViewBase
     SIBR_CLASS_PTR(GaussianLiveViewV42);
 
 public:
+    // views_per_frame = how many onRenderIBR() calls make up one Python frame.
+    // 2 for OpenXR stereo (left+right eye) — the default, so the v4.2 app is
+    // unaffected. 1 for a mono desktop window. The read-complete event that
+    // releases the IPC buffer back to Python is recorded after this many calls.
     GaussianLiveViewV42(const std::string& ip, int port,
                         uint render_w, uint render_h,
-                        bool white_bg = false, int device = 0);
+                        bool white_bg = false, int device = 0,
+                        int views_per_frame = 2);
     ~GaussianLiveViewV42() override;
 
     // Call ONCE per frame before onRender(). Non-blocking: snapshots whichever
@@ -97,6 +103,7 @@ public:
 private:
     bool connectTCP();
     bool handshakeWithPython();   // sends V42E, receives IPC metadata + model for both buffers
+    void sendIdentity(int id);    // client->server control msg: "CTL0" + int32 identity
     void recreateImageBuffer(uint w, uint h);
     void initShader();
     void startNetworkThread();
@@ -110,6 +117,12 @@ private:
     int         _port;
     bool        _connected     = false;
     bool        _handshakeDone = false;
+
+    // Guards writes to _socket from the GUI/render thread (sendIdentity) against
+    // the network thread's concurrent blocking recv. TCP is full-duplex so send
+    // and recv don't conflict, but the mutex serialises rapid button clicks.
+    std::mutex  _sendMutex;
+    int         _uiIdentity    = 0;   // GUI: currently selected identity index
 
     // LibTorch Color MLP (same TorchScript model as v4.0)
     torch::jit::script::Module _colorMLP;
@@ -186,6 +199,9 @@ private:
     bool _white_bg = false;
     int  _device   = 0;
     bool _hasData  = false;
+
+    // onRenderIBR() calls per Python frame: 2 = stereo (OpenXR), 1 = mono (desktop).
+    int  _viewsPerFrame = 2;
 
     // ── Per-stage timing (logged every kLogIntervalFrames frames) ────────────────
     // beginFrame() runs once per frame and should now be near-instant (it no longer

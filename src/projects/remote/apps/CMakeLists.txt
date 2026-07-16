@@ -27,3 +27,9 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/remoteGaussianOpenXRv4_2/CMakeLists.txt")
     add_subdirectory(remoteGaussianOpenXRv4_2/)
 endif()
+# NEW (v4.2 desktop): mono desktop-window viewer — same v4.2 CUDA IPC transport and
+# the same GaussianLiveViewV42 (compiled from remoteGaussianOpenXRv4_2/), no OpenXR.
+# Runs against the unchanged Python server. Same LibTorch / Windows IPC requirements.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/remoteGaussianDesktopV42/CMakeLists.txt")
+    add_subdirectory(remoteGaussianDesktopV42/)
+endif()
