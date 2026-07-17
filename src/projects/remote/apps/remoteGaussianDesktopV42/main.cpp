@@ -32,6 +32,26 @@
  *
  *   # Terminal 2
  *   SIBR_remoteGaussianDesktopV42_app_rwdi.exe --ip 127.0.0.1 --port 6012
+ *
+ * Split-screen A/B comparison (e.g. MIGS vs. MISTA): pass --ip2/--port2 for a
+ * second Python server and this app opens a second synchronized subview.
+ * Both tiles share ONE InteractiveCameraHandler, so orbiting either tile moves
+ * the camera in both — same viewpoint, same frame, one screenshot to compare.
+ * FPS is not a concern here (this mode exists for qualitative comparison, not
+ * live perf), so also bump --width/--height and pass --label1/--label2:
+ *
+ *   # Terminal 1 — model A (e.g. MIGS), its own port
+ *   python render_vr_v1_modular.py mode=predict dataset=migs migs.type=cp \
+ *       appearance_identity=2 load_ckpt="<ckpt_migs>.pth" wandb_disable=True \
+ *       gaussians_vr.port=6012
+ *
+ *   # Terminal 2 — model B (e.g. MISTA), a different port
+ *   python render_vr_v1_modular.py mode=predict dataset=zju_377_mono \
+ *       load_ckpt="<ckpt_mista>.pth" wandb_disable=True gaussians_vr.port=6013
+ *
+ *   # Terminal 3 — one window, both tiles
+ *   SIBR_remoteGaussianDesktopV42_app_rwdi.exe --port 6012 --port2 6013 \
+ *       --width 2560 --height 1080 --label1 MIGS --label2 MISTA
  */
 
 #include "GaussianLiveViewV42.hpp"
@@ -49,21 +69,42 @@ int main(int ac, char** av)
 {
     CommandLineArgs::parseMainArgs(ac, av);
 
-    Arg<std::string> argIp  ("ip",     "127.0.0.1");
-    Arg<int>         argPort("port",   6012);
-    Arg<uint>        argW   ("width",  1280);
-    Arg<uint>        argH   ("height", 960);
+    Arg<std::string> argIp    ("ip",     "127.0.0.1");
+    Arg<int>         argPort  ("port",   6012);
+    Arg<uint>        argW     ("width",  1280);
+    Arg<uint>        argH     ("height", 960);
+    // Split-screen A/B comparison: leave port2 at 0 to keep today's single-tile
+    // behavior unchanged. Set it to open a second synchronized tile fed by a
+    // second Python server (see the usage comment above main()).
+    Arg<std::string> argIp2    ("ip2",    "127.0.0.1");
+    Arg<int>         argPort2  ("port2",  0);
+    Arg<std::string> argLabel1 ("label1", "Model A");
+    Arg<std::string> argLabel2 ("label2", "Model B");
 
-    const std::string ip   = argIp.get();
-    const int         port = argPort.get();
-    const uint        w    = argW.get();
-    const uint        h    = argH.get();
+    const std::string ip          = argIp.get();
+    const int         port        = argPort.get();
+    const uint        w           = argW.get();
+    const uint        h           = argH.get();
+    const std::string ip2         = argIp2.get();
+    const int         port2       = argPort2.get();
+    const bool        splitScreen = (port2 != 0);
+    const std::string label1      = argLabel1.get();
+    const std::string label2      = argLabel2.get();
 
     sibr::Window window(w, h, PROGRAM_NAME);
 
-    // views_per_frame = 1: mono, one onRenderIBR() per Python frame.
+    // views_per_frame = 1: mono, one onRenderIBR() per Python frame. This holds
+    // per-view even in split-screen mode: each tile is its own GaussianLiveViewV42
+    // fed by its own Python server, so each still gets exactly one onRenderIBR()
+    // call per multiViewManager.onRender().
     auto gaussianView = std::make_shared<GaussianLiveViewV42>(
         ip, port, w, h, /*white_bg=*/false, /*device=*/0, /*views_per_frame=*/1);
+
+    std::shared_ptr<GaussianLiveViewV42> gaussianView2;
+    if (splitScreen) {
+        gaussianView2 = std::make_shared<GaussianLiveViewV42>(
+            ip2, port2, w, h, /*white_bg=*/false, /*device=*/0, /*views_per_frame=*/1);
+    }
 
     MultiViewManager multiViewManager(window, false);
 
@@ -97,20 +138,37 @@ int main(int ac, char** av)
         };
 
     multiViewManager.addIBRSubView(
-        "3DGS Desktop v4.2", gaussianView, interactiveCam,
+        splitScreen ? label1 : "3DGS Desktop v4.2", gaussianView, interactiveCam,
         sibr::Vector2u(w, h),
         ImGuiWindowFlags_NoBringToFrontOnFocus
     );
+    if (splitScreen) {
+        // Same camHandler instance as the first tile: InteractiveCameraHandler is
+        // shared, not copied (captured by shared_ptr in interactiveCam), so both
+        // tiles read/update the exact same camera pose each frame — that is what
+        // keeps the two models locked to the same viewpoint while orbiting.
+        multiViewManager.addIBRSubView(
+            label2, gaussianView2, interactiveCam,
+            sibr::Vector2u(w, h),
+            ImGuiWindowFlags_NoBringToFrontOnFocus
+        );
+    }
     // NOTE: no multiViewManager.renderingMode(...) call — the default mono
     // rendering mode is exactly what we want. That single omission is the whole
     // difference from the OpenXR app.
 
-    SIBR_LOG << "[Desktop] Connecting to Python at " << ip << ":" << port
-             << " — same V42E protocol as the VR app. Mouse to navigate; the "
-             << "identity buttons are in the GaussianLiveViewV42 panel." << std::endl;
+    if (splitScreen) {
+        SIBR_LOG << "[Desktop] Split-screen: \"" << label1 << "\" <- " << ip << ":" << port
+                 << "   \"" << label2 << "\" <- " << ip2 << ":" << port2
+                 << " — one shared camera, orbit either tile to move both." << std::endl;
+    } else {
+        SIBR_LOG << "[Desktop] Connecting to Python at " << ip << ":" << port
+                 << " — same V42E protocol as the VR app. Mouse to navigate; the "
+                 << "identity buttons are in the GaussianLiveViewV42 panel." << std::endl;
+    }
     SIBR_LOG << "[Desktop] Animation: P=pause/resume  Left/Right=step +/-1 frame. "
              << "Only the body pose freezes — the camera stays live, so you can "
-             << "orbit a frozen pose." << std::endl;
+             << "orbit a frozen pose." << (splitScreen ? " Applies to both tiles." : "") << std::endl;
 
     while (window.isOpened())
     {
@@ -134,16 +192,28 @@ int main(int ac, char** av)
         // empty _interpPath and this app passes no camera list (setup(..., nullptr)),
         // so it is inert here. If a camera path is ever loaded, P would also snap the
         // camera and should be rebound.
+        // In split-screen mode both models must step in lockstep, otherwise a
+        // qualitative comparison is comparing two different poses/frames.
         {
             const auto& keys = sibr::Input::global().key();
-            if (keys.isPressed(sibr::Key::P))     gaussianView->togglePause();
-            if (keys.isPressed(sibr::Key::Left))  gaussianView->stepFrame(-1);
-            if (keys.isPressed(sibr::Key::Right)) gaussianView->stepFrame(+1);
+            if (keys.isPressed(sibr::Key::P)) {
+                gaussianView->togglePause();
+                if (splitScreen) gaussianView2->togglePause();
+            }
+            if (keys.isPressed(sibr::Key::Left)) {
+                gaussianView->stepFrame(-1);
+                if (splitScreen) gaussianView2->stepFrame(-1);
+            }
+            if (keys.isPressed(sibr::Key::Right)) {
+                gaussianView->stepFrame(+1);
+                if (splitScreen) gaussianView2->stepFrame(+1);
+            }
         }
 
         // Non-blocking: snapshots whichever buffer Python's network thread most
         // recently announced. Color MLP + rasterizer run inside onRenderIBR.
         gaussianView->beginFrame();
+        if (splitScreen) gaussianView2->beginFrame();
 
         multiViewManager.onUpdate(sibr::Input::global());
         multiViewManager.onRender(window);
