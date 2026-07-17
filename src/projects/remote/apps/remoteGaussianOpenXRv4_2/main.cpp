@@ -42,14 +42,16 @@
 #define PROGRAM_NAME "3DGS-Avatar OpenXR Viewer v4.2"
 using namespace sibr;
 
+// ac: number of command line arguments
+// av: pointer of arguments
 int main(int ac, char** av)
 {
     CommandLineArgs::parseMainArgs(ac, av);
 
     Arg<std::string> argIp  ("ip",     "127.0.0.1");
     Arg<int>         argPort("port",   6012);
-    Arg<uint>        argW   ("width",  960);
-    Arg<uint>        argH   ("height", 1080);
+    Arg<uint>        argW   ("width",  1824);
+    Arg<uint>        argH   ("height", 1968);
 
     std::string ip   = argIp.get();
     int         port = argPort.get();
@@ -58,53 +60,48 @@ int main(int ac, char** av)
 
     sibr::Window window(w, h, PROGRAM_NAME);
 
+    // create the GS viewer (see file)
     auto gaussianView = std::make_shared<GaussianLiveViewV42>(ip, port, w, h);
 
+    // Creates the SIBR manager that has many subview (fps counter, different options)
     MultiViewManager multiViewManager(window, false);
-
+    
+    //Creates the VR renderer
     auto openxrMode = std::make_shared<OpenXRRdrMode>(window);
-    // OpenXRRdrMode's "seated" mode (default) anchors the headset's tracked
-    // pose by translating it by this camera's position each frame. Under the
-    // Meta/Oculus runtime the reference space is STAGE (floor origin) and, after
-    // the renderer's Y/Z flip, the eye camera looks toward +Z — so the avatar
-    // (recentered to the world origin in render_vr_v4_2.py) must sit at NEGATIVE
-    // Z to be in front of the viewer. The old +2.5 put it behind the camera.
-    //
-    // seatOffset is now adjustable live from the keyboard so it can be dialed in
-    // by watching the desktop mirror window (no headset needed):
-    //   A/D : move viewer -X / +X        W/S : move viewer -Z / +Z (closer/farther)
-    //   Q/E : move viewer -Y / +Y (down/up)   R : reset to default
-    // The current value is printed to the console whenever it changes.
-    // Under STAGE (floor origin) the eye sits at Y ~= +1.05 (head height); the
-    // renderer flips Y, so seatOffset.y must be ~ +1.05 to bring the camera back
-    // to the avatar's mid-height. Z is negative so the avatar (world origin) is
-    // in front. Fine-tune live with the keys below.
-    static sibr::Vector3f seatOffset(0.f, 1.05f, -2.5f);
+
+    //init seat offset
+    static sibr::Vector3f seatOffset(0.f, -1.0f, -2.5f);
     static const sibr::Vector3f kSeatDefault = seatOffset;
     static const float kSeatStep = 0.2f;
 
+    // creates a camera and put at current seating position
     MultiViewManager::IBRViewUpdateFunc fixedCam =
         [](sibr::ViewBase::Ptr&, sibr::Input&, const sibr::Viewport&, const float) {
             sibr::InputCamera cam;
             cam.position(seatOffset);
             return cam;
         };
+    
+    // register the view in one sub-view window, choose rendering mode
     multiViewManager.addIBRSubView(
         "3DGS OpenXR v4.2", gaussianView, fixedCam,
         sibr::Vector2u(w, h),
-        ImGuiWindowFlags_NoBringToFrontOnFocus
+        ImGuiWindowFlags_NoBringToFrontOnFocus  // disable bringin the window to front when clickin on it (since it is bigger thqn others)
     );
     multiViewManager.renderingMode(openxrMode);
+
 
     SIBR_LOG << "[V42] Seat offset keyboard control: A/D=X  W/S=Z  Q/E=Y  R=reset. "
              << "Start = (" << seatOffset.x() << ", " << seatOffset.y() << ", " << seatOffset.z()
              << "). Watch the desktop mirror to dial the avatar into view." << std::endl;
 
+    // THE MAIN LOOP
     while (window.isOpened())
     {
         sibr::Input::poll();
         window.makeContextCurrent();
 
+        //press esc = close windows
         if (sibr::Input::global().key().isPressed(sibr::Key::Escape))
             window.close();
 

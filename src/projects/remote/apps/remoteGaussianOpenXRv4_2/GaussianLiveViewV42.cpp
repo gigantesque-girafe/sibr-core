@@ -1,6 +1,4 @@
 /*
- * NEW FILE — does not modify any existing SIBR source.
- *
  * GaussianLiveViewV42 implementation  (v4.2, double-buffered pipeline)
  *
  * Transport upgrade over v4.0:
@@ -40,7 +38,10 @@
 using boost::asio::ip::tcp;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CUDA error helper
+// CUDA error helper that reports:
+// - the CUDA error message,
+// - the CUDA call that failed,
+// - the line number.
 // ─────────────────────────────────────────────────────────────────────────────
 
 #define CUDA_CHECK(call)                                                          \
@@ -53,7 +54,9 @@ using boost::asio::ip::tcp;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Resizable CUDA buffer helper (rasterizer scratch)
-// ─────────────────────────────────────────────────────────────────────────────
+// if capacite needed is bigger than capacite current, free the current then alloc new memory
+// templae pour que ca fonctionne avec tous type de valeurs (int, ptr etc)
+
 
 template<typename T>
 static std::function<char*(size_t)> resizeFunctional(T** ptr, size_t& cap)
@@ -70,7 +73,6 @@ static std::function<char*(size_t)> resizeFunctional(T** ptr, size_t& cap)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Copy shader (float SSBO → render target)
-// ─────────────────────────────────────────────────────────────────────────────
 
 static const char* COPY_VERT_SRC = R"GLSL(
 #version 450
@@ -180,10 +182,7 @@ sibr::GaussianLiveViewV42::~GaussianLiveViewV42()
     if (_imgPtr)  cudaFree(_imgPtr);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Private helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
 void sibr::GaussianLiveViewV42::initShader()
 {
     _copyShader.init("GaussianLiveV42Copy", COPY_VERT_SRC, COPY_FRAG_SRC);
@@ -239,6 +238,7 @@ bool sibr::GaussianLiveViewV42::connectTCP()
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Startup handshake
+// return 
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool sibr::GaussianLiveViewV42::handshakeWithPython()
@@ -369,14 +369,22 @@ void sibr::GaussianLiveViewV42::networkThreadFunc()
 
 void sibr::GaussianLiveViewV42::startNetworkThread()
 {
+    // read the latest buffer available: -1 is nothing has rendered yet, 0 and 1 are our double buffers
     _latestReadyBuf.store(-1, std::memory_order_relaxed);
+
+    // Allow the network thread's receive loop to run
     _networkRunning.store(true, std::memory_order_relaxed);
+
+    // Launch the background network thread, which executes
+    // GaussianLiveViewV42::networkThreadFunc() on this object.
     _networkThread = std::thread(&GaussianLiveViewV42::networkThreadFunc, this);
 }
 
 void sibr::GaussianLiveViewV42::stopNetworkThread()
 {
+    // Unallow the network thread's receive loop to run
     _networkRunning.store(false, std::memory_order_relaxed);
+
     // The network thread is blocked in a synchronous read; closing the socket
     // is what actually unblocks it (the atomic flag alone won't interrupt it).
     if (_socket) {
@@ -387,8 +395,9 @@ void sibr::GaussianLiveViewV42::stopNetworkThread()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// beginFrame — call once per frame. Non-blocking: snapshots whichever buffer
-// the network thread most recently marked ready. Never waits on Python.
+// beginFrame — call once per frame. Check the connection and select which GPU buffer
+// to render 
+// return true if ok; false if connection failed
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool sibr::GaussianLiveViewV42::beginFrame()
@@ -406,9 +415,12 @@ bool sibr::GaussianLiveViewV42::beginFrame()
         _latestReadyBuf.store(-1, std::memory_order_relaxed);
     }
 
+    // if not connected, return false
     if (!_connected) {
         if (!connectTCP()) { _hasData = false; return false; }
     }
+
+    // if handshake not done, then do the handshake. If handshake fail, return false, if succeed, create network thread
     if (!_handshakeDone) {
         if (!handshakeWithPython()) {
             _connected = false;
@@ -452,19 +464,6 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     uint w = (uint)_resolution.x();
     uint h = (uint)_resolution.y();
 
-    // One-shot ground-truth log: where is the eye camera in the same world the
-    // avatar lives in (recentered to origin), and where does it look? Useful when
-    // re-tuning seatOffset for a new headset/runtime/reference-space.
-    static bool s_camLogged = false;
-    if (!s_camLogged) {
-        s_camLogged = true;
-        sibr::Vector3f p = eye.position();
-        sibr::Vector3f d = eye.dir();
-        SIBR_LOG << "[V42] CAM world pos=(" << p.x() << ", " << p.y() << ", " << p.z()
-                 << ")  dir=(" << d.x() << ", " << d.y() << ", " << d.z()
-                 << ")  (avatar centered at origin, ~1.66m tall)" << std::endl;
-    }
-
     // ── View / projection matrices ────────────────────────────────────────────
     auto view_mat = eye.view();
     auto proj_mat = eye.viewproj();
@@ -485,7 +484,7 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     // returns immediately.
     CUDA_CHECK(cudaEventSynchronize(buf.dataReadyEvt));
 
-    // ── Run Color MLP on IPC data (zero-copy) ─────────────────────────────────
+    // ── COLOR MLP===============================================================
     auto t_mlp0 = std::chrono::steady_clock::now();
     {
         auto dev  = torch::Device(torch::kCUDA, _device);
