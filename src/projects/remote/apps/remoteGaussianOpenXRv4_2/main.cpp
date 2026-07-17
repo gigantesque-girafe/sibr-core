@@ -99,6 +99,8 @@ int main(int ac, char** av)
     SIBR_LOG << "[V42] Seat offset keyboard control: A/D=X  W/S=Z  Q/E=Y  R=reset. "
              << "Start = (" << seatOffset.x() << ", " << seatOffset.y() << ", " << seatOffset.z()
              << "). Watch the desktop mirror to dial the avatar into view." << std::endl;
+    SIBR_LOG << "[V42] Animation: P=pause/resume  Left/Right=step +/-1 frame "
+             << "(body pose freezes; head tracking stays live)." << std::endl;
 
     while (window.isOpened())
     {
@@ -132,6 +134,17 @@ int main(int ac, char** av)
                 SIBR_LOG << "[V42] seatOffset = (" << seatOffset.x() << ", "
                          << seatOffset.y() << ", " << seatOffset.z() << ")" << std::endl;
             }
+        }
+
+        // Animation pause / frame step (mirrors the view's ImGui panel, which is not
+        // readable inside the headset). Freezes the body pose only — headset tracking
+        // stays live, so a frozen pose can be walked around and inspected.
+        // P and the arrows avoid the seat-offset keys above (A/D/W/S/Q/E/R).
+        {
+            auto& kb = sibr::Input::global().key();
+            if (kb.isPressed(sibr::Key::P))     gaussianView->togglePause();
+            if (kb.isPressed(sibr::Key::Left))  gaussianView->stepFrame(-1);
+            if (kb.isPressed(sibr::Key::Right)) gaussianView->stepFrame(+1);
         }
 
         // Non-blocking: snapshots whichever buffer Python's network thread most

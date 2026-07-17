@@ -33,6 +33,7 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -137,6 +138,7 @@ sibr::GaussianLiveViewV42::GaussianLiveViewV42(
     , _ip(ip), _port(port)
     , _white_bg(white_bg), _device(device)
     , _viewsPerFrame(views_per_frame < 1 ? 1 : views_per_frame)
+    , _nativeRes((int)render_w, (int)render_h)
 {
     int num_devices = 0;
     CUDA_CHECK(cudaGetDeviceCount(&num_devices));
@@ -703,26 +705,59 @@ void sibr::GaussianLiveViewV42::onRenderIBR(sibr::IRenderTarget& dst,
     }
 }
 
+bool sibr::GaussianLiveViewV42::sendControl(const char* magic, int payload)
+{
+    if (!_connected || !_socket) {
+        SIBR_LOG << "[V42] control " << magic << "(" << payload
+                 << ") ignored — not connected." << std::endl;
+        return false;
+    }
+    // 4-byte magic + int32 payload, little-endian (matches vr_viewer.protocol).
+    unsigned char msg[8];
+    std::memcpy(msg, magic, 4);
+    std::memcpy(msg + 4, &payload, 4);
+    try {
+        std::lock_guard<std::mutex> lk(_sendMutex);
+        tcp_send_all(*_socket, msg, sizeof(msg));
+        return true;
+    } catch (const std::exception& e) {
+        SIBR_LOG << "[V42] control " << magic << " failed: " << e.what() << std::endl;
+        return false;
+    }
+}
+
 void sibr::GaussianLiveViewV42::sendIdentity(int id)
 {
     if (id < 0) id = 0;
     if (id >= kNumIdentities) id = kNumIdentities - 1;
-    if (!_connected || !_socket) {
-        SIBR_LOG << "[V42] sendIdentity(" << id << ") ignored — not connected." << std::endl;
-        return;
-    }
-    // "CTL0" + int32 identity, little-endian (matches vr_viewer.protocol).
-    unsigned char msg[8];
-    std::memcpy(msg, "CTL0", 4);
-    std::memcpy(msg + 4, &id, 4);
-    try {
-        std::lock_guard<std::mutex> lk(_sendMutex);
-        tcp_send_all(*_socket, msg, sizeof(msg));
+    if (sendControl("CTL0", id))
         SIBR_LOG << "[V42] sent identity switch -> " << id
                  << " (subject " << kSubjectNames[id] << ")" << std::endl;
-    } catch (const std::exception& e) {
-        SIBR_LOG << "[V42] sendIdentity failed: " << e.what() << std::endl;
+}
+
+void sibr::GaussianLiveViewV42::setPaused(bool paused)
+{
+    if (!sendControl("CTL1", paused ? 1 : 0))
+        return;   // leave _uiPaused alone so the GUI keeps matching Python
+    _uiPaused = paused;
+    SIBR_LOG << "[V42] animation " << (paused ? "paused" : "resumed") << std::endl;
+}
+
+void sibr::GaussianLiveViewV42::togglePause()
+{
+    setPaused(!_uiPaused);
+}
+
+void sibr::GaussianLiveViewV42::stepFrame(int delta)
+{
+    // Stepping only means something while paused, and Python ignores it otherwise
+    // — so pause first rather than dropping the request on the floor.
+    if (!_uiPaused) {
+        setPaused(true);
+        if (!_uiPaused) return;   // send failed; nothing to step
     }
+    if (sendControl("CTL2", delta))
+        SIBR_LOG << "[V42] step frame " << (delta >= 0 ? "+" : "") << delta << std::endl;
 }
 
 void sibr::GaussianLiveViewV42::onGUI()
@@ -736,6 +771,44 @@ void sibr::GaussianLiveViewV42::onGUI()
         ImGui::Text("IPC ready       : %s",  (_buffers[0].ptr != nullptr && _buffers[1].ptr != nullptr) ? "yes" : "no");
         ImGui::Text("Current buffer  : %d",  _currentBufIdx);
         ImGui::Text("Python frame id : %llu", (unsigned long long)_currentFrameId);
+
+        // ── Render resolution (mono desktop only) ────────────────────────────
+        // The OpenXR app already has this in OpenXRRdrMode's own panel, driven by
+        // the headset resolution — it reasserts setResolution() every frame, so a
+        // second slider here would be overridden and misleading. Mono has no such
+        // owner: the resolution is set once at construction and never touched.
+        if (_viewsPerFrame == 1) {
+            ImGui::Separator();
+            ImGui::Text("Render resolution");
+            ImGui::Text("Window (native) : %ix%i", _nativeRes.x(), _nativeRes.y());
+            ImGui::Text("Rendering       : %ix%i",
+                        _nativeRes.x() / _uiDownscale, _nativeRes.y() / _uiDownscale);
+            // Rasterizing fewer pixels is the cheapest framerate lever here; the
+            // copy shader stretches the smaller buffer over the full window.
+            if (ImGui::SliderInt("Down scale factor", &_uiDownscale, 1, 8)) {
+                if (_uiDownscale < 1) _uiDownscale = 1;
+                setResolution(sibr::Vector2i(std::max(1, _nativeRes.x() / _uiDownscale),
+                                             std::max(1, _nativeRes.y() / _uiDownscale)));
+            }
+        }
+
+        // ── Animation pause / frame step ─────────────────────────────────────
+        // Freezes the body pose only; the camera stays live so a frozen pose can
+        // be inspected from any angle. "Python frame id" above keeps ticking while
+        // paused (Python re-announces the held buffer) — watch the pose, not the id.
+        ImGui::Separator();
+        ImGui::Text("Animation");
+        ImGui::Text("State: %s", _uiPaused ? "PAUSED" : "playing");
+
+        if (ImGui::Button(_uiPaused ? "Resume (P)" : "Pause (P)"))
+            togglePause();
+
+        // Always live: stepFrame() pauses first, so stepping while playing does the
+        // obvious thing. (No BeginDisabled here — this ImGui is 1.60, which predates it.)
+        ImGui::SameLine();
+        if (ImGui::Button("< Frame (Left)")) stepFrame(-1);
+        ImGui::SameLine();
+        if (ImGui::Button("Frame > (Right)")) stepFrame(+1);
 
         // ── Live appearance-identity switch ──────────────────────────────────
         ImGui::Separator();

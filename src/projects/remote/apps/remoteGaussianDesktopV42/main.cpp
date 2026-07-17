@@ -108,6 +108,9 @@ int main(int ac, char** av)
     SIBR_LOG << "[Desktop] Connecting to Python at " << ip << ":" << port
              << " — same V42E protocol as the VR app. Mouse to navigate; the "
              << "identity buttons are in the GaussianLiveViewV42 panel." << std::endl;
+    SIBR_LOG << "[Desktop] Animation: P=pause/resume  Left/Right=step +/-1 frame. "
+             << "Only the body pose freezes — the camera stays live, so you can "
+             << "orbit a frozen pose." << std::endl;
 
     while (window.isOpened())
     {
@@ -118,6 +121,25 @@ int main(int ac, char** av)
 
         if (sibr::Input::global().key().isPressed(sibr::Key::Escape))
             window.close();
+
+        // Animation pause / frame step (mirrors the view's ImGui panel). Freezes the
+        // body pose only — the trackball stays live, so a frozen pose can be orbited
+        // and inspected, which is the point during evaluation.
+        //
+        // isPressed() is edge-triggered in SIBR (!last && current), so these fire once
+        // per press — unlike isActivated(), which is the held/continuous variant.
+        //
+        // Key choice: the arrows are unused by every SIBR camera handler. P is bound by
+        // InteractiveCameraHandler to snapToCamera(-1), but that early-returns on an
+        // empty _interpPath and this app passes no camera list (setup(..., nullptr)),
+        // so it is inert here. If a camera path is ever loaded, P would also snap the
+        // camera and should be rebound.
+        {
+            const auto& keys = sibr::Input::global().key();
+            if (keys.isPressed(sibr::Key::P))     gaussianView->togglePause();
+            if (keys.isPressed(sibr::Key::Left))  gaussianView->stepFrame(-1);
+            if (keys.isPressed(sibr::Key::Right)) gaussianView->stepFrame(+1);
+        }
 
         // Non-blocking: snapshots whichever buffer Python's network thread most
         // recently announced. Color MLP + rasterizer run inside onRenderIBR.

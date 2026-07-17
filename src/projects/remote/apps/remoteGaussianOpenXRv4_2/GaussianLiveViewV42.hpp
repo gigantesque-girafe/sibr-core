@@ -100,10 +100,24 @@ public:
     void onUpdate(Input&) override {}
     void setResolution(const sibr::Vector2i& size) override;
 
+    // ── Animation pause / frame step ─────────────────────────────────────────
+    // Python owns the animation frame counter, so these only send a request; the
+    // body pose freezes on the pose currently on screen while the camera stays
+    // live, which is the point — you can orbit a frozen pose to inspect an error.
+    // Public so each app's main() can bind them to keys (the GUI panel is not
+    // readable inside a headset). See vr_viewer/server.py for the pause loop.
+    void togglePause();
+    void setPaused(bool paused);
+    void stepFrame(int delta);   // +1 / -1 animation frames; implies pause
+    bool isPaused() const { return _uiPaused; }
+
 private:
     bool connectTCP();
     bool handshakeWithPython();   // sends V42E, receives IPC metadata + model for both buffers
-    void sendIdentity(int id);    // client->server control msg: "CTL0" + int32 identity
+    // client->server control msg: 4-byte magic + int32 payload. Returns false if
+    // not connected or the send threw. "CTL0" identity / "CTL1" pause / "CTL2" step.
+    bool sendControl(const char* magic, int payload);
+    void sendIdentity(int id);
     void recreateImageBuffer(uint w, uint h);
     void initShader();
     void startNetworkThread();
@@ -123,6 +137,7 @@ private:
     // and recv don't conflict, but the mutex serialises rapid button clicks.
     std::mutex  _sendMutex;
     int         _uiIdentity    = 0;   // GUI: currently selected identity index
+    bool        _uiPaused      = false;   // GUI: mirrors the pause state last sent to Python
 
     // LibTorch Color MLP (same TorchScript model as v4.0)
     torch::jit::script::Module _colorMLP;
@@ -202,6 +217,15 @@ private:
 
     // onRenderIBR() calls per Python frame: 2 = stereo (OpenXR), 1 = mono (desktop).
     int  _viewsPerFrame = 2;
+
+    // ── Mono/desktop render-resolution downscale ─────────────────────────────
+    // Under OpenXR the resolution is not ours to set: OpenXRRdrMode calls
+    // setResolution(headsetRes / itsOwnDownscale) every frame and shows its own
+    // "Down scale factor" slider, so the GUI below exposes this for the mono
+    // desktop app only (_viewsPerFrame == 1) — otherwise the two would fight.
+    // _nativeRes is the constructor's full resolution, the divisor's numerator.
+    sibr::Vector2i _nativeRes    { 1, 1 };
+    int            _uiDownscale  = 1;
 
     // ── Per-stage timing (logged every kLogIntervalFrames frames) ────────────────
     // beginFrame() runs once per frame and should now be near-instant (it no longer
