@@ -18,8 +18,20 @@
  * 2 the event would never fire and Python would stall after the first frame.
  *
  * Navigation and UI come for free from SIBR:
- *   - InteractiveCameraHandler gives trackball / FPS navigation (see its own GUI
- *     panel for the mode switch and camera save/load).
+ *   - InteractiveCameraHandler, started in TRACKBALL mode (its own default is FPS,
+ *     i.e. WASD/IJKL flying — see switchMode() below). Mouse mapping, all from
+ *     core/view/TrackBall.cpp, applies to whichever tile the mouse is over:
+ *         left-drag  (centre 75%)  orbit around the pivot
+ *         left-drag  (outer band)  roll
+ *         right-drag (centre 75%)  pan
+ *         right-drag (outer band)  dolly in/out
+ *         scroll                   zoom (keeps the pivot; no key may be held)
+ *         Y                        toggle back to FPS/WASD, Y again to return
+ *     The pivot is planted at eye + dir*radius, so the radius MUST be set before
+ *     setup() or it defaults to 100 and you orbit a point far behind the avatar.
+ *   - The "Camera ..." GUI panel (mode dropdown, FoV, near/far, save/load camera)
+ *     appears because the handler is registered via addCameraForView() — that is
+ *     also what makes MultiViewManager drive it and draw the trackball gizmo.
  *   - The view's onGUI() panel — live Gaussian count, connection state, and the
  *     appearance-identity buttons that send "CTL0" back to Python — is the same
  *     one the VR app shows on its mirror window.
@@ -116,8 +128,12 @@ int main(int ac, char** av)
     // and the camera handler's GUI can save the pose once it is framed.
     const Viewport viewport(0.f, 0.f, (float)w, (float)h);
 
+    // Distance from the initial eye to the avatar at the world origin. Reused as the
+    // trackball radius just below, so the two cannot drift apart.
+    constexpr float kEyeDist = 3.f;
+
     sibr::Camera initCam;
-    initCam.setLookAt(sibr::Vector3f(0.f, 0.f, 3.f),    // eye
+    initCam.setLookAt(sibr::Vector3f(0.f, 0.f, kEyeDist), // eye
                       sibr::Vector3f(0.f, 0.f, 0.f),    // look at avatar (world origin)
                       sibr::Vector3f(0.f, 1.f, 0.f));   // up
     initCam.aspect((float)w / (float)h);
@@ -125,23 +141,42 @@ int main(int ac, char** av)
     initCam.zfar(100.f);
 
     auto camHandler = std::make_shared<InteractiveCameraHandler>();
+    // Before setup(): setup() -> fromCamera() -> TrackBall::fromCamera(cam, vp, radius)
+    // plants the orbit pivot at eye + dir*radius. The handler's default radius is 100
+    // and we pass no raycaster (the Gaussians live on the GPU, there is no proxy mesh to
+    // intersect), so nothing would correct it — the pivot would land at (0,0,-97) and
+    // both orbit and scroll-zoom would be useless. kEyeDist puts it on the avatar.
+    camHandler->getRadius() = kEyeDist;
     camHandler->setup(sibr::InputCamera(initCam, (int)w, (int)h), viewport, nullptr);
+    // Mouse navigation instead of the FPS default. switchMode() re-syncs the internal
+    // cameras through fromCamera(), so it re-reads the radius set above — hence after
+    // setup(), not before. Y (or the Camera panel dropdown) toggles back to FPS.
+    camHandler->switchMode(sibr::InteractiveCameraHandler::TRACKBALL);
 
     // Drive the view from the interactive camera each frame. (The v4.2 app uses
     // this same hook to pin a fixed seat pose instead, since the headset supplies
     // the real per-eye poses.)
+    //
+    // No camHandler->update() here: addCameraForView() below registers the handler with
+    // MultiViewManager, which already calls update(subInput, dt, viewport) once per tile
+    // per frame. Updating here as well would apply every drag and scroll notch twice.
     MultiViewManager::IBRViewUpdateFunc interactiveCam =
-        [camHandler](sibr::ViewBase::Ptr&, sibr::Input& input,
-                     const sibr::Viewport& vp, const float deltaTime) {
-            camHandler->update(input, deltaTime, vp);
+        [camHandler](sibr::ViewBase::Ptr&, sibr::Input&,
+                     const sibr::Viewport&, const float) {
             return camHandler->getCamera();
         };
 
+    const std::string view1Name = splitScreen ? label1 : "3DGS Desktop v4.2";
+
     multiViewManager.addIBRSubView(
-        splitScreen ? label1 : "3DGS Desktop v4.2", gaussianView, interactiveCam,
+        view1Name, gaussianView, interactiveCam,
         sibr::Vector2u(w, h),
         ImGuiWindowFlags_NoBringToFrontOnFocus
     );
+    // Registering the handler is what hands mouse navigation to MultiViewManager: it
+    // calls camHandler->update() with this tile's viewport and a mouse position remapped
+    // into it, renders the trackball gizmo, and shows the "Camera <name>" panel.
+    multiViewManager.addCameraForView(view1Name, camHandler);
     if (splitScreen) {
         // Same camHandler instance as the first tile: InteractiveCameraHandler is
         // shared, not copied (captured by shared_ptr in interactiveCam), so both
@@ -152,6 +187,11 @@ int main(int ac, char** av)
             sibr::Vector2u(w, h),
             ImGuiWindowFlags_NoBringToFrontOnFocus
         );
+        // Registered on both tiles so you can drag inside either one. Only the focused
+        // tile ever sees real input — MultiViewManager hands an empty Input() to the
+        // others and TrackBall::update() early-returns on it — so the two registrations
+        // never fight over the shared camera.
+        multiViewManager.addCameraForView(label2, camHandler);
     }
     // NOTE: no multiViewManager.renderingMode(...) call — the default mono
     // rendering mode is exactly what we want. That single omission is the whole
@@ -163,9 +203,12 @@ int main(int ac, char** av)
                  << " — one shared camera, orbit either tile to move both." << std::endl;
     } else {
         SIBR_LOG << "[Desktop] Connecting to Python at " << ip << ":" << port
-                 << " — same V42E protocol as the VR app. Mouse to navigate; the "
-                 << "identity buttons are in the GaussianLiveViewV42 panel." << std::endl;
+                 << " — same V42E protocol as the VR app. The identity buttons are in "
+                 << "the GaussianLiveViewV42 panel." << std::endl;
     }
+    SIBR_LOG << "[Desktop] Camera (trackball): Left-drag=orbit  Right-drag=pan "
+             << "(dolly near the border)  Scroll=zoom (no key held)  Y=FPS/WASD mode. "
+             << "Hover the rendered image, not the window chrome." << std::endl;
     SIBR_LOG << "[Desktop] Animation: P=pause/resume  Left/Right=step +/-1 frame. "
              << "Only the body pose freezes — the camera stays live, so you can "
              << "orbit a frozen pose." << (splitScreen ? " Applies to both tiles." : "") << std::endl;

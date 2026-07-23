@@ -14,19 +14,22 @@
 #include <thread>
 #include <boost/asio.hpp>
 
-constexpr char* jResX = "resolution_x";
-constexpr char* jResY = "resolution_y";
-constexpr char* jFovY = "fov_y";
-constexpr char* jFovX = "fov_x";
-constexpr char* jZFar = "z_far";
-constexpr char* jZNear = "z_near";
-constexpr char* jTrain = "train";
-constexpr char* jViewMat = "view_matrix";
-constexpr char* jViewProjMat = "view_projection_matrix";
-constexpr char* jScalingModifier = "scaling_modifier";
-constexpr char* jSHsPython = "shs_python";
-constexpr char* jRotScalePython = "rot_scale_python";
-constexpr char* jKeepAlive = "keep_alive";
+// const char* (not char*): string literals are const char[]; binding them to a
+// non-const char* is ill-formed under MSVC /Zc:strictStrings (VS2019). VS2022 was
+// more lenient, which is why the upstream Inria code compiled there unchanged.
+constexpr const char* jResX = "resolution_x";
+constexpr const char* jResY = "resolution_y";
+constexpr const char* jFovY = "fov_y";
+constexpr const char* jFovX = "fov_x";
+constexpr const char* jZFar = "z_far";
+constexpr const char* jZNear = "z_near";
+constexpr const char* jTrain = "train";
+constexpr const char* jViewMat = "view_matrix";
+constexpr const char* jViewProjMat = "view_projection_matrix";
+constexpr const char* jScalingModifier = "scaling_modifier";
+constexpr const char* jSHsPython = "shs_python";
+constexpr const char* jRotScalePython = "rot_scale_python";
+constexpr const char* jKeepAlive = "keep_alive";
 
 void sibr::RemotePointView::send_receive()
 {
